@@ -1,0 +1,101 @@
+TODO list for Perl module Object::LocalVars
+
+#--------------------------------------------------------------------------#
+# Features for next release
+#--------------------------------------------------------------------------#
+
+- read/only attribute
+- write missing documentation sections
+- update benchmarks
+
+#--------------------------------------------------------------------------#
+# Features for the future for additional functionality
+#--------------------------------------------------------------------------#
+
+- synonyms for :Prop (:Property :P) and :Method (:Meth :M) etc
+- @array and %hash with :Prop, etc. attributes
+- automethods
+- naming $self as something else
+- "super" like Spiffy does(?)
+- mixin support(?)
+
+#--------------------------------------------------------------------------#
+# Other changes to make
+#--------------------------------------------------------------------------#
+
+- refactor all code generators to eval the right thing into place with
+  less duplicate code all over the source.  (Build up string to eval in 
+  stages if some parts like caller checking are optional).
+
+- eventually, "eval" the wrapper function with all the right calls to local
+  once, and then make each stub function call the wrapper with the target
+  coderef -- effectively unrolls recursion and should keep the wrapper 
+  inefficiency constant as the number of properties increases
+
+#--------------------------------------------------------------------------#
+# Style thoughts -- refine for POD?
+#--------------------------------------------------------------------------#
+
+May be good practice if private properties are named with an underscore, e.g.,
+$_name, $_color to prevent unintentional clashes with lexicals created within
+methods.  Not really necessary, but sets them apart just a bit and signals that
+they are different.  (Sort of like $.name, etc. in Perl6) Or is this overkill?
+If warnings are on, "our $name : Prop; my $name" will issue a warning anyway.
+
+Accessor style -- using name() and set_name().  ( Apparently, Perl Best
+Practices endorses this -- have to see the logic there. ) Also, if I ever want
+to use name(index) or name(key) for @array and %hash property accessors, then I
+need to not use name(val) to set scalars.  set_name should return the object,
+to allow chaining.  This may give a reason to *avoid* underscores, as set__name
+is probably error-prone.
+
+Mutators should be (to paraphrase Bill Clinton) "safe, legal and rare" so
+maybe this doesn't matter much in the end.
+
+#--------------------------------------------------------------------------#
+# API thoughts -- refine for POD?
+#--------------------------------------------------------------------------#
+
+Too many accessors is a problem in that it breaks the OO encapsulation
+paradigm.  However, accessors are common in perl to get some typo protection
+(e.g. $self->{created} vs $self->{craeted} vs $self->created) and because
+having perl automatically generate them is easy.  That winds up opening up the
+class internals unless various protections are added to the accessors to make
+them private.  With Object::LocalVars's aliasing, properties can stay private
+and don't *need* an accessor.  This should be the default behavior.  Accessors
+might be needed for subclasses ("protected" properties) or for certain public
+access needs.  These should have to be requested.  It also means that users can
+use the default (private) and then write their own custom accessors if they
+need special handling, error checking, etc.
+
+On the other hand, methods are probably usually intended to be public, so
+that should be the default.  Typical Perl style is to use an underscore
+to signal private functions and either document them as internal or just
+not document them.  Users who call them anyway "deserve what they get" if
+a future version changes things. 
+
+This is consistent with the generally permissive Perl philosophy.  It's not
+over-protective -- it give us the rope to hang ourselves with quite readily.
+That said, it's easy to add the checks using properties, so we give users the
+option of adding checks if they want
+
+Summary of aliases for properties (including synonyms not yet written):
+
+                      Aliasing   Accessor  CallerChecked ClassWide
+:Property|:Prop|:P        Y          N           n/a          N
+:Private|:Priv            Y          N           n/a          N
+:Protected|:Prot          Y          Y           Y            N
+:Public|:Pub              Y          Y           N            N         
+:Class|:C                 Y          N           n/a          Y
+:ClassProperty|:CProp|:CP Y          N           n/a          Y
+:ClassPrivate|:CPriv      Y          N           n/a          Y
+:ClassProtected|:CProt    Y          Y           Y            Y
+:ClassPublic|:CPub        Y          Y           N            Y
+
+Summary for methods:
+                        CallerChecked
+:Method|:Meth|:M             N
+:Public|:Pub                 N
+:Protected|:Prot             Y
+:Private|:Priv               Y
+

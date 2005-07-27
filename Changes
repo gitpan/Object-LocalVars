@@ -1,0 +1,12 @@
+Revision history for Perl module Object::LocalVars
+
+0.10 Wed Jul 27 16:08:45 EDT 2005
+	- first public release as Object::LocalVars (thanks to M. Simon Cavalletto
+      for suggesting this name)
+    - supports public/private/protected properties and class properties
+    - methods are wrapped to locally alias $self and all properties
+    - automatically creates accessors and mutators (if appropriate)
+    - automatically provides new() and DESTROY()
+    - supports PREBUILD, BUILD and DEMOLISH helper functions
+    
+

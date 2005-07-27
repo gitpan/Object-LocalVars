@@ -1,0 +1,381 @@
+NAME
+    Object::LocalVars - Outside-in objects with local aliasing of $self and
+    object variables
+
+SYNOPSIS
+      package My::Object;
+      use strict;
+      use Object::LocalVars;
+
+      give_methods our $self;  # this exact line is required
+
+      our $field1 : Prop;
+      our $field2 : Prop;
+
+      sub as_string : Method { 
+        return "$self has properties '$field1' and '$field2'";
+      }
+  
+DESCRIPTION
+    *This is an early development release. Documentation is incomplete and
+    the API may change. Do not use for production purposes. Comments
+    appreciated.*
+
+    This module helps developers create "outside-in" objects. Properties
+    (and `$self') are declared as package globals. Method calls are wrapped
+    such that these globals take on a local value that is correct for the
+    specific calling object and the duration of the method call. I.e.
+    `$self' is locally aliased to the calling object and properties are
+    locally aliased to the values of the properties for that object. The
+    package globals themselves are empty and data are stored in a separate
+    namespace for each package, keyed off the reference addresses of the
+    objects.
+
+    "Outside-in" objects are similar to "inside-out" objects, which store
+    data in a single lexical hash closure for each property that is keyed
+    off the reference addresses of the objects. Both differ from
+    "traditional" Perl objects, which store data for the object within a
+    blessed data structure. For both "outside-in" and "inside-out" objects,
+    data is stored centrally and the blessed reference is simply a key to
+    look up the right data in the central data store.
+
+    Unlike with "inside-out" objects, the use of package variables for
+    "outside-in" objects allows for the use of local symbol table
+    manipulation. This allows Object::LocalVars to deliver a variety of
+    features, though with some drawbacks.
+
+  Features
+
+    *   Provides $self automatically to methods without `my $self = shift'
+        and the like
+
+    *   Provides dynamic aliasing of properties within methods -- methods
+        can access properties directly as variables without the overhead of
+        calls to accessors or mutators, eliminating the overhead of these
+        calls in methods
+
+    *   Array and hash properties may be accessed via direct dereference of
+        a simple variable, allowing developers to push, pop, splice, etc.
+        without the usual tortured syntax to dereference an accessor call
+
+    *   Properties no longer require accessors to provide a way to do
+        compile time syntax checking under `strict'
+
+    *   Uses attributes to mark properties and methods, but only in the
+        BEGIN phase so should be mod_perl friendly (though I haven't tested
+        this yet)
+
+    *   Provides attributes for public, protected and private properties,
+        class properties and methods
+
+    *   Does not use source filtering
+
+    *   Orthogonality -- can subclass just about any other class, regardless
+        of implementation. (Also a nice feature of some "inside-out"
+        implementations)
+
+  Drawbacks
+
+    *   Method efficiency -- wrappers around methods create extra overhead
+        on method calls
+
+    *   Minimal encapsulation -- data is hidden but still publically
+        accessible, unlike approaches that use lexical closures to create
+        strong encapsulation
+
+    *   Designed for single inheritance only. Multiple inheritance may or
+        may not work depending on the exact circumstances
+
+USAGE
+  Overview
+
+    (discuss general usage, from importing through various pieces that can
+    be defined)
+
+  Declaring Object Properties
+
+      our $prop1 : Prop;
+
+    (Define object properties)
+
+    Properties are declared by specifying an `our' variable with an
+    appropriate attribute. There are a variety of attributes (and aliases
+    for attributes) available which result in different degrees of privacy,
+    different rules for creating accessors, etc.
+
+    (Discuss aliasing)
+
+    Object::LocalVars provides the following attributes for object
+    properties:
+
+      :Prop
+      :Priv
+
+    Either of these attributes declare a private property. Private
+    properties are aliased within methods, but no accessors or mutators are
+    created. This is the recommended default unless specific alternate
+    functionality is needed.
+
+      :Prot
+
+    This attribute declares a protected property. Protected properties are
+    aliased within methods, and an accessor and mutator are created.
+    However, the accessor and mutator may only be called by the declaring
+    package or a subclass of it.
+
+      :Pub
+
+    This attribute declares a public property. Public properties are aliased
+    within methods, and an accessor and mutator are created that may be
+    called from anywhere.
+
+      :ReadOnly
+
+    (Not yet implemented) This attribute declares a public property. Public
+    properties are aliased within methods, and an accessor and mutator are
+    created. The accessor may be called from anywhere, but the mutator may
+    only be called from the declaring package or a subclass of it.
+
+  Declaring Class Properties
+
+      our $class1 : Class;
+
+    Class properties work like object properties, but the same value for
+    each is available for all objects (or when called as a class method).
+
+    Object::LocalVars provides the following attributes for class
+    properties:
+
+      :Class
+      :ClassPriv
+
+    Either of these attributes declare a private class property. Private
+    class properties are aliased within methods, but no accessors or
+    mutators are created. This is the recommended default unless specific
+    alternate functionality is needed.
+
+      :ClassProt
+
+    This attribute declares a protected class property. Protected class
+    properties are aliased within methods, and an accessor and mutator are
+    created. However, the accessor and mutator may only be called by the
+    declaring package or a subclass of it.
+
+      :ClassPub
+
+    This attribute declares a public class property. Public class properties
+    are aliased within methods, and an accessor and mutator are created that
+    may be called from anywhere.
+
+      :ReadOnly
+
+    (Not yet implemented) This attribute declares a public class property.
+    Public class properties are aliased within methods, and an accessor and
+    mutator are created. The accessor may be called from anywhere, but the
+    mutator may only be called from the declaring package or a subclass of
+    it.
+
+  Declaring Methods
+
+      sub foo : Method {
+        my ($arg1, $arg2) = @_;  # no need to shift $self
+        # $self and all properties automatically aliased
+      }
+
+    (define methods)
+
+    (discuss how $self and properties are made available)
+
+    Object::LocalVars provides the following attributes for subroutines:
+
+      :Method
+      :Pub
+
+    Either of these attributes declare a public method. Public methods may
+    be called from anywhere. This is the recommended default unless specific
+    alternate functionality is needed.
+
+      :Prot
+
+    This attribute declares a protected method. Protected methods may be
+    called only from the declaring package or a subclass of it.
+
+      :Priv
+
+    This attribute declares a protected method. Protected methods may only
+    be called only from the declaring package. Private methods should
+    generally be called directly, not using method syntax -- the major
+    purpose of this attribute is to provide a wrapper that prevents the
+    subroutine from being called outside the declaring package. See Hints
+    and Tips.
+
+  Accessors and Mutators
+
+      our $foo : Pub;     # :Pub create an accessor and mutator
+      $obj->foo;          # returns value of foo for $obj
+      $obj->set_foo($val) # sets foo to $val and returns $obj
+  
+    (define and describe)
+
+  Constructors and Destructors
+
+    (define)
+
+    (discuss calling pattern and usage of BUILD, PREBUILD, DEMOLISH)
+
+  Hints and Tips
+
+    *Calling private methods on $self*
+
+    Good style for private method calling in traditional Perl
+    object-oriented programming is to call private methods directly,
+    `foo($self,@args)', rather than with method lookup, `$self-'foo(@args)>.
+    With Object::LocalVars, a private method should be called as
+    `foo(@args)' as the local aliases for $self and the properties are
+    already in place.
+
+    *Avoiding hidden internal data*
+
+    For some package using Object::LocalVars, e.g. `My::Package', object
+    properties are stored in `My::Package::DATA', class properites are
+    stored in `My::Package::CLASSDATA', and methods are stored in
+    `My::Package::METHODS'. Do not access these areas directly or overwrite
+    them with other global data or unexpected results are guaranteed to
+    occur.
+
+METHODS TO BE WRITTEN BY A DEVELOPER
+  `PREBUILD()'
+
+      # Example
+      sub PREBUILD {
+        my @args = @_;
+        # filter @args in some way
+        return @args;
+      }
+
+    This subroutine may be defined to filter arguments to new() before
+    passing them to a superclass new(). *This must not be tagged with a
+    `:Method' attribute* or equivalent as it is called before any object is
+    available. The primary purpose of this subroutine is to strip out any
+    arguments that would cause the superclass constructor to die and/or to
+    add any default arguments that should always be passed to the superclass
+    constructor.
+
+  `BUILD()'
+
+      # Example
+      # Assuming our $count : Class;
+      sub BUILD : Method {
+        my %init = @_;
+        $prop1 = $init{prop1};
+        $count++;
+      }
+
+    This method may be defined to initialize the object after it is created.
+    If available, it is called at the end of the constructor. The `@_' array
+    contains the original array passed to `new()' -- regardless of any
+    filtering by `PREBUILD()'.
+
+  `DEMOLISH()'
+
+      # Example
+      # Assume our $count : Class;
+      sub DEMOLISH : Method {
+        $count--;
+      }
+
+    This method may be defined to provide some cleanup actions when the
+    object goes out of scope and is destroyed. If available, it is called at
+    the start of the destructor (i.e `DESTROY').
+
+METHODS AUTOMATICALLY EXPORTED
+    These methods will be automatically exported for use. This export can be
+    prevented by passing the method name preceded by an "!" in a list after
+    the call to "use Object::LocalVars". E.g.:
+
+      use Object::LocalVars qw( !new );
+
+    This is generally not needed or recommended, but is available should
+    developers need some very customized behavior in `new()' or `DESTROY()'
+    that can't be achieved with `BUILD()' and `DEMOLISH()'.
+
+  `give_methods()'
+
+      give_methods our $self;
+
+    Installs wrappers around all subroutines tagged as methods. This
+    function (and the declaration of `our $self') *must* be used in all
+    classes built with Object::LocalVars.
+
+  `new()'
+
+    The constructor. This is not used within Object::LocalVars directly but
+    is exported automatically when Object::LocalVars is imported. `new()'
+    calls `PREBUILD' (if it exists), blesses a new object either from a
+    superclass (if one exists) or from scratch, and calls `BUILD' (if it
+    exists). Classes built with Object::LocalVars have this available by
+    default and generally do not need their own constructor.
+
+  `DESTROY()'
+
+    A destructor. This is not used within Object::LocalVars directly but is
+    exported automatically when Object::LocalVars is imported. `DESTROY()'
+    calls `DEMOLISH()' (if it exists) and reblesses the object into the
+    first package in @ISA that can DESTROY (if any) so that destruction
+    chaining will happen automatically.
+
+  `caller()'
+
+    This subroutine is exported automatically and emulates the built-in
+    `caller()' with the exception that if the caller is Object::LocalVars
+    (i.e. from the wrapper functions), it will continue to look up the
+    caller stack until the first non-Object::LocalVars package is found.
+
+BENCHMARKING
+    Forthcoming. In short, faster than traditional approaches if ratio of
+    property access within methods is high relative to number of method
+    calls. Slower than traditional approaches if there are many method calls
+    that individually do little property access.
+
+SEE ALSO
+    These other modules provide similiar functionality and inspired this
+    one.
+
+    *   Class::Std -- framework for inside-out objects; supports
+        multiple-inheritance
+
+    *   Lexical::Attributes -- inside-out objects; provides $self and other
+        syntactic sugar via source filtering
+
+    *   Spiffy -- a "magic foundation class" for object-oriented programming
+        with lots of syntactic tricks using via source filtering
+
+INSTALLATION
+    The following commands will build, test, and install this module:
+
+     perl Build.PL
+     perl Build
+     perl Build test
+     perl Build install
+
+BUGS
+    Please report bugs using the CPAN Request Tracker at
+    http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-Loc
+    al
+
+AUTHOR
+    David A Golden (DAGOLDEN)
+
+    dagolden@cpan.org
+
+    http://dagolden.com/
+
+COPYRIGHT
+    Copyright (c) 2005 by David A Golden
+
+    This program is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
+
+    The full text of the license can be found in the LICENSE file included
+    with this module.
+
