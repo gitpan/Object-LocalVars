@@ -16,6 +16,7 @@ Module::Build->new(
         Test::More => 0.47,
         Test::Exception => 0,   # any version has lives_ok and dies_ok
     },
-    recommends => {},
-    conflicts => {},
+    meta_add => { 
+        noindex => { dir => [ qw/examples/ ] } 
+    },
 )->create_build_script;

@@ -1,7 +1,12 @@
 Revision history for Perl module Object::LocalVars
 
+0.11 Wed Jul 27 20:10:21 EDT 2005
+    - Added "noindex" to META.yml for example files
+    - Fixed URL for rt.cpan.org in POD
+    - POD typo fixes and some additional POD
+
 0.10 Wed Jul 27 16:08:45 EDT 2005
-	- first public release as Object::LocalVars (thanks to M. Simon Cavalletto
+    - first public release as Object::LocalVars (thanks to M. Simon Cavalletto
       for suggesting this name)
     - supports public/private/protected properties and class properties
     - methods are wrapped to locally alias $self and all properties

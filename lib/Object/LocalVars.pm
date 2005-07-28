@@ -2,7 +2,7 @@ package Object::LocalVars;
 use 5.006;
 use strict;
 use warnings;
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 # Required modules
 use Carp;
@@ -364,25 +364,25 @@ I<This is an early development release.  Documentation is incomplete and the
 API may change.  Do not use for production purposes.  Comments appreciated.>
 
 This module helps developers create "outside-in" objects.  Properties (and
-C<$self>) are declared as package globals.  Method calls are wrapped such that 
+C< $self >) are declared as package globals.  Method calls are wrapped such that 
 these globals take on a local value that is correct for the specific calling
-object and the duration of the method call.  I.e. C<$self> is locally aliased
+object and the duration of the method call.  I.e. C< $self > is locally aliased
 to the calling object and properties are locally aliased to the values of the
 properties for that object.  The package globals themselves are empty and data
 are stored in a separate namespace for each package, keyed off the reference
 addresses of the objects.
 
-"Outside-in" objects are similar to "inside-out" objects, which store
-data in a single lexical hash closure for each property that is keyed off 
-the reference addresses of the objects.  Both differ from "traditional" Perl
-objects, which store data for the object within a blessed data structure. 
-For both "outside-in" and "inside-out" objects, data is stored centrally
-and the blessed reference is simply a key to look up the right data in
-the central data store.
+"Outside-in" objects are similar to "inside-out" objects, which store data in a
+single lexical hash closure for each property that is keyed off the reference
+addresses of the objects.  Both differ from "traditional" Perl objects, which
+store data for the object directly within a blessed reference to a data
+structure.  For both "outside-in" and "inside-out" objects, data is stored
+centrally and the blessed reference is simply a key to look up the right data
+in the central data store.
 
 Unlike with "inside-out" objects, the use of package variables for 
 "outside-in" objects allows for the use of local symbol table manipulation.
-This allows Object::LocalVars to deliver a variety of features, though with
+This allows Object::LocalVars to deliver a variety of features -- though with
 some drawbacks.
 
 =head2 Features
@@ -391,7 +391,7 @@ some drawbacks.
 
 =item * 
 
-Provides $self automatically to methods without C<my $self = shift> and the
+Provides $self automatically to methods without C< my $self = shift > and the
 like
 
 =item * 
@@ -408,8 +408,8 @@ the usual tortured syntax to dereference an accessor call
 
 =item *
 
-Properties no longer require accessors to provide a way to
-do compile time syntax checking under C<strict>
+Properties no longer require accessors to have compile time syntax checking
+under C< use strict >
 
 =item * 
 
@@ -457,44 +457,43 @@ work depending on the exact circumstances
 
 =head2 Overview
 
-(discuss general usage, from importing through various pieces that can
+(TODO: discuss general usage, from importing through various pieces that can
 be defined)
 
 =head2 Declaring Object Properties
 
-  our $prop1 : Prop;
+(TODO: Define object properties)
 
-(Define object properties)
+Properties are declared by specifying a package variable using C< our > and an
+appropriate attribute.  There are a variety of attributes (and aliases for
+attributes) available which result in different degrees of privacy and different
+rules for creating accessors and mutators.
 
-Properties are declared by specifying an C<our> variable with an appropriate
-attribute.  There are a variety of attributes (and aliases for attributes)
-available which result in different degrees of privacy, different rules for
-creating accessors, etc.
-
-(Discuss aliasing)
+(TODO: Discuss aliasing)
 
 Object::LocalVars provides the following attributes for object properties:
 
-  :Prop
-  :Priv
+  our $prop1 : Prop;
+  our $prop2 : Priv;
 
 Either of these attributes declare a private property.  Private properties are
 aliased within methods, but no accessors or mutators are created.  This is the
-recommended default unless specific alternate functionality is needed.
+recommended default unless specific alternate functionality is needed. (Of course,
+developers are free to write methods that act as accessors or mutators.)
 
-  :Prot
+  our $prop3 : Prot;
 
 This attribute declares a protected property.  Protected properties are aliased
 within methods, and an accessor and mutator are created.  However, the accessor
 and mutator may only be called by the declaring package or a subclass of it.
 
-  :Pub
+  our $prop4 : Pub;
 
 This attribute declares a public property.  Public properties are aliased
 within methods, and an accessor and mutator are created that may be called from
 anywhere.
 
-  :ReadOnly
+  our $prop5 : ReadOnly;
 
 (Not yet implemented)  This attribute declares a public property.  Public
 properties are aliased within methods, and an accessor and mutator are created.
@@ -503,35 +502,33 @@ from the declaring package or a subclass of it.
 
 =head2 Declaring Class Properties
 
-  our $class1 : Class;
-
-Class properties work like object properties, but the same value for each is
-available for all objects (or when called as a class method).
+Class properties work like object properties, but the value of a class property
+is the same value all objects (or when used in a class method).
 
 Object::LocalVars provides the following attributes for class properties:
 
-  :Class
-  :ClassPriv
+  our $class1 : Class;
+  our $class2 : ClassPriv;
 
 Either of these attributes declare a private class property.  Private class
 properties are aliased within methods, but no accessors or mutators are
 created.  This is the recommended default unless specific alternate
 functionality is needed.
 
-  :ClassProt
+  our $class3 : ClassProt;
 
 This attribute declares a protected class property.  Protected class properties
 are aliased within methods, and an accessor and mutator are created.  However,
 the accessor and mutator may only be called by the declaring package or a
 subclass of it.
 
-  :ClassPub
+  our $class4 : ClassPub;
 
 This attribute declares a public class property.  Public class properties are
 aliased within methods, and an accessor and mutator are created that may be
 called from anywhere.
 
-  :ReadOnly
+  our $class5 : ReadOnly;
 
 (Not yet implemented)  This attribute declares a public class property.  Public
 class properties are aliased within methods, and an accessor and mutator are
@@ -546,14 +543,14 @@ called from the declaring package or a subclass of it.
     # $self and all properties automatically aliased
   }
 
-(define methods)
+(TODO: define methods)
 
-(discuss how $self and properties are made available)
+(TODO: discuss how $self and properties are made available within methods)
 
 Object::LocalVars provides the following attributes for subroutines:
 
-  :Method
-  :Pub
+  sub fcn1 : Method { }
+  sub fcn2 : Pub { }
 
 Either of these attributes declare a public method.  Public methods may be
 called from anywhere.  This is the recommended default unless specific
@@ -566,7 +563,7 @@ only from the declaring package or a subclass of it.
 
   :Priv
 
-This attribute declares a protected method.  Protected methods may only be
+This attribute declares a private method.  Private methods may only be
 called only from the declaring package.  Private methods should generally be
 called directly, not using method syntax -- the major purpose of this attribute
 is to provide a wrapper that prevents the subroutine from being called outside
@@ -574,35 +571,35 @@ the declaring package.  See L</Hints and Tips>.
 
 =head2 Accessors and Mutators
 
-  our $foo : Pub;     # :Pub create an accessor and mutator
+  our $foo : Pub;     # :Pub creates an accessor and mutator
   $obj->foo;          # returns value of foo for $obj
   $obj->set_foo($val) # sets foo to $val and returns $obj
   
-(define and describe)
+(TODO: define and describe)
 
 =head2 Constructors and Destructors
 
-(define)
+(TODO: define)
 
-(discuss calling pattern and usage of BUILD, PREBUILD, DEMOLISH)
+(TODO: discuss calling pattern and usage of BUILD, PREBUILD, DEMOLISH)
 
 =head2 Hints and Tips
 
 I<Calling private methods on $self>
 
 Good style for private method calling in traditional Perl object-oriented
-programming is to call private methods directly, C<foo($self,@args)>, rather
-than with method lookup, C<$self->foo(@args)>.  With Object::LocalVars, a
-private method should be called as C<foo(@args)> as the local aliases for $self
+programming is to call private methods directly, C< foo($self,@args) >, rather
+than with method lookup, C<< $self->foo(@args) >>.  With Object::LocalVars, a
+private method should be called as C< foo(@args) > as the local aliases for $self
 and the properties are already in place.
 
 I<Avoiding hidden internal data>
 
-For some package using Object::LocalVars, e.g. C<My::Package>, object
-properties are stored in C<My::Package::DATA>, class properites are stored in
-C<My::Package::CLASSDATA>, and methods are stored in C<My::Package::METHODS>.
-Do not access these areas directly or overwrite them with other global data or
-unexpected results are guaranteed to occur.
+For a package using Object::LocalVars, e.g. C< My::Package >, object properties
+are stored in C< My::Package::DATA >, class properties are stored in 
+C< My::Package::CLASSDATA >, and methods are stored in 
+C< My::Package::METHODS >. Do not access these areas directly or overwrite 
+them with other global data or unexpected results are guaranteed to occur.
 
 =head1 METHODS TO BE WRITTEN BY A DEVELOPER
 
@@ -615,12 +612,12 @@ unexpected results are guaranteed to occur.
     return @args;
   }
 
-This subroutine may be defined to filter arguments to new() before passing them
-to a superclass new().  I<This must not be tagged with a C<:Method> attribute>
-or equivalent as it is called before any object is available.  The primary
-purpose of this subroutine is to strip out any arguments that would cause the
-superclass constructor to die and/or to add any default arguments that should
-always be passed to the superclass constructor.
+This subroutine may be written to filter arguments given to C<new()> before
+passing them to a superclass C<new()>.  I<This must not be tagged with a
+C<:Method> attribute> or equivalent as it is called before any object is
+available.  The primary purpose of this subroutine is to strip out any
+arguments that would cause the superclass constructor to die and/or to add any
+default arguments that should always be passed to the superclass constructor.
 
 =head2 C<BUILD()>
 
@@ -652,7 +649,7 @@ the destructor (i.e C<DESTROY>).
 =head1 METHODS AUTOMATICALLY EXPORTED
 
 These methods will be automatically exported for use.  This export can 
-be prevented by passing the method name preceded by an "!" in a list 
+be prevented by passing the method name preceded by a "!" in a list 
 after the call to "use Object::LocalVars".  E.g.:
 
   use Object::LocalVars qw( !new );
@@ -694,10 +691,10 @@ non-Object::LocalVars package is found.
 
 =head1 BENCHMARKING
 
-Forthcoming.  In short, faster than traditional approaches if ratio of 
-property access within methods is high relative to number of method calls.
-Slower than traditional approaches if there are many method calls that 
-individually do little property access. 
+Forthcoming.  In short, Object::LocalVars is faster than traditional approaches
+if the ratio of property access within methods is high relative to number of
+method calls.  Slower than traditional approaches if there are many method
+calls that individually do little property access. 
 
 =head1 SEE ALSO
 
@@ -718,7 +715,7 @@ syntactic sugar via source filtering
 =item *
 
 L<Spiffy> -- a "magic foundation class" for object-oriented programming with
-lots of syntactic tricks using via source filtering
+lots of syntactic tricks via source filtering
 
 =back
 
@@ -734,7 +731,7 @@ The following commands will build, test, and install this module:
 =head1 BUGS
 
 Please report bugs using the CPAN Request Tracker at 
-http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-Local
+http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-LocalVars
 
 =head1 AUTHOR
 
