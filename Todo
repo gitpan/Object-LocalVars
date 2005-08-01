@@ -1,6 +1,19 @@
 TODO list for Perl module Object::LocalVars
 
 #--------------------------------------------------------------------------#
+# Bugs to squash
+#--------------------------------------------------------------------------#
+
+- DESTROY rebless shouldn't assume first @ISA can also DESTROY; need to find
+  an @ISA that can DESTROY or else just forget about it
+
+#--------------------------------------------------------------------------#
+# Tests to write
+#--------------------------------------------------------------------------#
+
+- test same-named class properties
+
+#--------------------------------------------------------------------------#
 # Features for next release
 #--------------------------------------------------------------------------#
 
@@ -18,6 +31,9 @@ TODO list for Perl module Object::LocalVars
 - naming $self as something else
 - "super" like Spiffy does(?)
 - mixin support(?)
+- thread safety -- use Data::Uniqid to generate ID and store in blessed
+  scalar as the object ID  (but not as default -- need an import option
+  to do it this way because of speed penalty)
 
 #--------------------------------------------------------------------------#
 # Other changes to make
@@ -98,4 +114,32 @@ Summary for methods:
 :Public|:Pub                 N
 :Protected|:Prot             Y
 :Private|:Priv               Y
+
+#--------------------------------------------------------------------------#
+# Thoughts on thread safety
+#--------------------------------------------------------------------------#
+
+Major issue is that refaddr can't be used to key the property hashes.  Changing
+that to a unique ID stored in the blessed scalar makes it thread-safe at least
+in that spawning a new thread doesn't screw up.  (Data::Uniqid seems portable,
+though probably not as fast as XS versions like Data::UUID and Win32API::GUID)
+
+Sharing objects across threads seems much trickier.  First, the package
+globals holding data all need to be shared.  Next, access has to be coordinated
+could be done with semphors in the wrapper, but that blocks everything until 
+the method exits.  Alternatively, maybe declare all properties as protected
+(or even, say, :Shared and get no property aliasing) and only use accessors
+to manipulate data.  Accessors can lock the target before reading/writing.  
+Still ugly if accessing an array or hash-ref -- the method will have to
+lock that, too, I think, or will have to get/store. Alias of $self should 
+still be OK, as that's just aliasing a subroutine argument within the same
+thread.
+
+New objects created in one thread will still have data available in other
+threads due to shared data storage hashes, but won't be easily accessable.
+Would need to have a way to have a thread pass or return an object UUID to
+allow another thread to know what to manipulate.  Object destruction also
+becomes a major issue -- can't destroy when the reference count goes to 
+zero because the UUID exists in the other thread.  Have to disable DESTROY and 
+have users manually destroy UUIDs when they are done with them.
 

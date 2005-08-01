@@ -1,5 +1,16 @@
 Revision history for Perl module Object::LocalVars
 
+0.12 Sun Jul 31 23:11:18 EDT 2005
+    - eliminated need for Scalar::Util for refaddr
+    - moved build_requires to requires to workaround CPANPLUS bug
+    - fixed POD whitespace errors (found on cpan.uwinnipeg.ca, though not
+      on search.cpan.org)
+    - some minor optimization of accessors/mutators
+    - optimization of public method wrapper
+    - updates to example/benchmarking code
+    - started TODO testing on thread safety
+    - fixed (I hope) "noindex" for META.yml
+
 0.11 Wed Jul 27 20:10:21 EDT 2005
     - Added "noindex" to META.yml for example files
     - Fixed URL for rt.cpan.org in POD

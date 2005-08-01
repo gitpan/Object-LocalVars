@@ -2,15 +2,14 @@
 use ExtUtils::MakeMaker;
 WriteMakefile
 (
+          'PL_FILES' => {},
+          'INSTALLDIRS' => 'site',
           'NAME' => 'Object::LocalVars',
+          'EXE_FILES' => [],
           'VERSION_FROM' => 'lib/Object/LocalVars.pm',
           'PREREQ_PM' => {
-                           'Scalar::Util' => '1.08',
-                           'Test::Exception' => '0',
-                           'Test::More' => '0.47'
-                         },
-          'INSTALLDIRS' => 'site',
-          'EXE_FILES' => [],
-          'PL_FILES' => {}
+                           'Test::More' => '0.47',
+                           'Test::Exception' => 0
+                         }
         )
 ;

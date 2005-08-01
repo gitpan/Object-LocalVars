@@ -2,17 +2,21 @@ package Object::LocalVars;
 use 5.006;
 use strict;
 use warnings;
-our $VERSION = '0.11';
+our $VERSION = "0.12";
 
 # Required modules
 use Carp;
-use Scalar::Util qw(refaddr);
-# use Sub::Uplevel; # not using for now
 
 # Exporting
 use Exporter 'import';
 our @EXPORT = qw(   caller give_methods new DESTROY 
                     MODIFY_SCALAR_ATTRIBUTES MODIFY_CODE_ATTRIBUTES );
+
+#--------------------------------------------------------------------------#
+# Declarations
+#--------------------------------------------------------------------------#
+                    
+my (%public_methods, %protected_methods, %private_methods);
 
 #--------------------------------------------------------------------------#
 # caller
@@ -35,10 +39,16 @@ sub caller {
 #--------------------------------------------------------------------------#
 
 sub give_methods {
-    my $caller = caller;
-    _install_public_methods($caller);
-    _install_protected_methods($caller);
-    _install_private_methods($caller);
+    my $package = caller;
+    for ( @{$public_methods{$package}} ) {
+        _install_wrapper($package, $_, "public");
+    };
+    for ( @{$protected_methods{$package}} ) {
+        _install_wrapper($package, $_, "protected");
+    };
+    for ( @{$private_methods{$package}} ) {
+        _install_wrapper($package, $_, "private");
+    };
     return 1;
 }
 
@@ -52,13 +62,15 @@ sub new {
     $class = ref($class) if ref($class);
     my @args = defined *{$class."::PREBUILD"}{CODE} ? 
         &{$class."::PREBUILD"}(@_) : @_;
-    my @parents = @{"${class}::ISA"};
+
+    # leftmost superclass creates object if it can
     my $self;
-    for (@parents) {
+    for (@{"${class}::ISA"}) {
         $self = $_->new(@args), last if $_->can("new");
     }
     $self = \(my $scalar) unless $self;
     bless $self, $class;
+    
     $self->BUILD(@_) if defined *{$class."::BUILD"}{CODE};
     return $self;
 }
@@ -70,21 +82,24 @@ sub new {
 sub DESTROY {
     no strict 'refs';
     my $self = shift;
-    my $class = ref $self;
+    my $class = ref $self or return;
     $self->DEMOLISH if defined *{$class."::DEMOLISH"}{CODE};
-    my $addr = refaddr $self;
-    for my $p ( keys %{"${class}::DATA::"} ) {
-        delete (${"${class}::DATA::$p"}{$addr});
+    my $addr = Object::LocalVars::_ident $self;
+    for ( keys %{"${class}::DATA::"} ) {
+        delete (${"${class}::DATA::$_"}{$addr});
     }
-    my @parents = @{"${class}::ISA"};
-    bless ($self, $parents[0]) if @parents;
+    for ( @{"${class}::ISA"} ) {
+        if ( $_->can("DESTROY") ) {
+            bless ($self, $_);
+            return;
+        }
+    }
 }
 
 #--------------------------------------------------------------------------#
 # MODIFY_CODE_ATTRIBUTES
 #--------------------------------------------------------------------------#
 
-my (%public_methods, %protected_methods, %private_methods);
 sub MODIFY_CODE_ATTRIBUTES {
     my ($package, $referent, @attrs) = @_;
     for my $attr (@attrs) {
@@ -119,14 +134,12 @@ sub MODIFY_SCALAR_ATTRIBUTES {
             ${$OL_PACKAGE."::DATA::".$OL_NAME} = {}; # make it exist
             *{$OL_PACKAGE."::".$OL_NAME} =
                 sub { 
-                    my $self = shift;
-                    return ${$OL_PACKAGE."::DATA::".$OL_NAME}{refaddr $self};
+                    return ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0] )};
                 };
             *{$OL_PACKAGE."::set_".$OL_NAME} =
                 sub { 
-                    my ($self, $value) = @_;
-                    ${$OL_PACKAGE."::DATA::".$OL_NAME}{refaddr $self} = $value;
-                    return $self;
+                    ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0] )} = $_[1];
+                    return $_[0];
                 };
             undef $attr;
         } 
@@ -135,19 +148,18 @@ sub MODIFY_SCALAR_ATTRIBUTES {
             my $OL_NAME = *{$symbol}{NAME};
             ${$OL_PACKAGE."::DATA::".$OL_NAME} = {}; # make it exist
             *{$OL_PACKAGE."::".$OL_NAME} = sub { 
-                my $self = shift;
                 my ($caller,undef,undef,$fcn) = caller(0);
                 croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
                     unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
-                return ${$OL_PACKAGE."::DATA::".$OL_NAME}{refaddr $self};
+                return ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0])};
+    
             };
             *{$OL_PACKAGE."::set_$OL_NAME"} = sub { 
-                my ($self, $value) = @_;
                 my ($caller,undef,undef,$fcn) = caller(0);
                 croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
                     unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
-                ${$OL_PACKAGE."::DATA::".$OL_NAME}{refaddr $self} = $value;
-                return $self;
+                ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0])} = $_[1];
+                return $_[0];
             };
             undef $attr;
         }
@@ -169,19 +181,17 @@ sub MODIFY_SCALAR_ATTRIBUTES {
             my $OL_NAME = *{$symbol}{NAME};
             ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = undef; # make it exist
             *{$OL_PACKAGE."::".$OL_NAME} = sub { 
-                my $class = shift;
                 my ($caller,undef,undef,$fcn) = caller(0);
                 croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
                     unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
                 return ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME};
             };
             *{$OL_PACKAGE."::set_$OL_NAME"} = sub { 
-                my ($class, $value) = @_;
                 my ($caller,undef,undef,$fcn) = caller(0);
                 croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
                     unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
-                ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = $value;
-                return $class;
+                ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = $_[1];
+                return $_[0];
             };
             undef $attr;
         }
@@ -190,13 +200,11 @@ sub MODIFY_SCALAR_ATTRIBUTES {
             my $OL_NAME = *{$symbol}{NAME};
             ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = undef; # make it exist
             *{$OL_PACKAGE."::".$OL_NAME} = sub { 
-                my $class = shift;
                 return ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME};
             };
             *{$OL_PACKAGE."::set_$OL_NAME"} = sub { 
-                my ($class, $value) = @_;
-                ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = $value;
-                return $class;
+                ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = $_[1];
+                return $_[0];
             };
             undef $attr;
         }
@@ -222,114 +230,90 @@ sub _findsym {
 }
 
 #--------------------------------------------------------------------------#
-# _install_private_methods
+# _gen_class_locals
 #--------------------------------------------------------------------------#
 
-sub _install_private_methods {
+sub _gen_class_locals {
     no strict 'refs';
-    no warnings 'redefine';
-    my ($package) = @_;
-    for my $coderef ( @{$private_methods{$package}} ) {
-        my $symbol = _findsym($package, $coderef) or die;
-        my $name = *{$symbol}{NAME};
-        *{$package."::METHODS::$name"} = $coderef;
-        *{$package."::$name"} = sub { 
-            my ($obj, @args) = @_;
-            my ($caller) = caller();
-            croak "$name is a private method and can't be called from $package"
-                unless $caller eq $package;
-            local ${$package."::self"} = $obj;
-            my $props = [ keys %{$package."::CLASSDATA"} ];
-            push @$props, keys %{$package."::DATA::"} if ref($obj);
-            my $uplevel = 2;
-            if (@$props) {
-                _wrap_props($obj, $props, $package, $uplevel, $coderef, \@args);
-            } else {
-                local $Carp::CarpLevel = $Carp::CarpLevel + $uplevel;
-                $coderef->(@args);
-            }
-        }; # end sub 
-    };
-}
-
-#--------------------------------------------------------------------------#
-# _install_protected_methods
-#--------------------------------------------------------------------------#
-
-sub _install_protected_methods {
-    no strict 'refs';
-    no warnings 'redefine';
-    my ($package) = @_;
-    for my $coderef ( @{$protected_methods{$package}} ) {
-        my $symbol = _findsym($package, $coderef) or die;
-        my $name = *{$symbol}{NAME};
-        *{$package."::METHODS::$name"} = $coderef;
-        *{$package."::$name"} = sub { 
-            my ($obj, @args) = @_;
-            my ($caller) = caller();
-            croak "$name is a protected method and can't be called from $package"
-                unless UNIVERSAL::isa( $caller, $package );
-            local ${$package."::self"} = $obj;
-            my $props = [ keys %{$package."::CLASSDATA"} ];
-            push @$props, keys %{$package."::DATA::"} if ref($obj);
-            my $uplevel = 2;
-            if (@$props) {
-                _wrap_props($obj, $props, $package, $uplevel, $coderef, \@args);
-            } else {
-                local $Carp::CarpLevel = $Carp::CarpLevel + $uplevel;
-                $coderef->(@args);
-            }
-        }; # end sub 
-    };
-}
-
-#--------------------------------------------------------------------------#
-# _install_public_methods
-#--------------------------------------------------------------------------#
-
-sub _install_public_methods {
-    no strict 'refs';
-    no warnings 'redefine';
-    my ($package) = @_;
-    for my $coderef ( @{$public_methods{$package}} ) {
-        my $symbol = _findsym($package, $coderef) or die;
-        my $name = *{$symbol}{NAME};
-        *{$package."::METHODS::$name"} = $coderef;
-        *{$package."::$name"} = sub { 
-            my ($obj, @args) = @_;
-            local ${$package."::self"} = $obj;
-            my $props = [ keys %{$package."::CLASSDATA"} ];
-            push @$props, keys %{$package."::DATA::"} if ref($obj);
-            my $uplevel = 2;
-            if (@$props) {
-                _wrap_props($obj, $props, $package, $uplevel, $coderef, \@args);
-            } else {
-                local $Carp::CarpLevel = $Carp::CarpLevel + $uplevel;
-                $coderef->(@args);
-            }
-        }; # end sub 
-    };
-}
-
-#--------------------------------------------------------------------------#
-# _wrap_props
-#--------------------------------------------------------------------------#
-
-sub _wrap_props {
-    no strict 'refs';
-    my ($obj, $props, $caller, $uplevel, $fcn, $args) = @_;
-    my $p = shift @$props;
-    my $is_class = exists ${$caller."::CLASSDATA"}{$p};
-    local *{$caller."::$p"} =  $is_class ?
-        \${$caller."::CLASSDATA"}{$p} :
-        \${$caller."::DATA::$p"}{refaddr $obj};
-    $uplevel++;
-    if (@$props) {
-        _wrap_props ($obj, $props, $caller, $uplevel, $fcn, $args);
-    } else {
-        local $Carp::CarpLevel = $Carp::CarpLevel + $uplevel;
-        $fcn->(@$args);
+    my $package = shift;
+    my $evaltext = "";
+    for ( keys %{$package."::CLASSDATA"} ) {
+        $evaltext .= 
+            "local *{'${package}::$_'} = \\\${'${package}::CLASSDATA'}{$_};";
     }
+    return $evaltext;
+}
+
+#--------------------------------------------------------------------------#
+# _gen_object_locals
+#--------------------------------------------------------------------------#
+
+sub _gen_object_locals {
+    no strict 'refs';
+    my $package = shift;
+    my $evaltext = "my \$id; 
+                    \$id = Object::LocalVars::_ident(\$obj) if ref(\$obj);";
+    for ( keys %{$package."::DATA::"} ) {
+        $evaltext .= "\$id and local *{'${package}::$_'} = " .
+                     "\\\${'${package}::DATA::$_'}{\$id};";
+    }
+    return $evaltext;
+}
+
+#--------------------------------------------------------------------------#
+# _gen_privacy
+#--------------------------------------------------------------------------#
+
+sub _gen_privacy {
+    my ($package, $name, $privacy) = @_;
+    SWITCH: for ($privacy) {
+        /public/    && do { return "" };
+
+        /protected/ && do { return 
+            "my (\$caller) = caller();
+            croak q/$name is a protected method and can't be called from ${package}/
+                unless UNIVERSAL::isa( \$caller, '$package' );"
+        };
+
+        /private/ && do { return
+            "my (\$caller) = caller();
+            croak q/$name is a private method and can't be called from ${package}/
+                unless \$caller eq '$package';"
+        };
+    }
+}
+
+#--------------------------------------------------------------------------#
+# ident
+#--------------------------------------------------------------------------#
+
+sub _ident {
+    return 0 + $_[0];
+}
+
+#--------------------------------------------------------------------------#
+# _install_wrapper
+#--------------------------------------------------------------------------#
+
+sub _install_wrapper {
+    no strict 'refs';
+    no warnings 'redefine';
+    my ($package,$coderef,$privacy) = @_;
+    my $symbol = _findsym($package, $coderef) or die;
+    my $name = *{$symbol}{NAME};
+    *{$package."::METHODS::$name"} = $coderef;
+    eval " *{'${package}::${name}'} = sub { 
+            my \$obj = shift;" .
+            _gen_privacy( $package, $name, $privacy ) .
+            "local \${'${package}::self'} = \$obj; " .
+            _gen_class_locals($package) .
+            _gen_object_locals($package) .
+            "local \$Carp::CarpLevel = \$Carp::CarpLevel + 2;
+            \&{'${package}::METHODS::${name}'}(\@_);
+        }"
+    ; # eval
+    die $@ if $@;
+    return;
 }
 
 1; #this line is important and will help the module return a true value
@@ -348,25 +332,25 @@ variables
   package My::Object;
   use strict;
   use Object::LocalVars;
-
+ 
   give_methods our $self;  # this exact line is required
-
+ 
   our $field1 : Prop;
   our $field2 : Prop;
-
+ 
   sub as_string : Method { 
     return "$self has properties '$field1' and '$field2'";
   }
-  
+
 =head1 DESCRIPTION
 
 I<This is an early development release.  Documentation is incomplete and the
 API may change.  Do not use for production purposes.  Comments appreciated.>
 
 This module helps developers create "outside-in" objects.  Properties (and
-C< $self >) are declared as package globals.  Method calls are wrapped such that 
+C<$self>) are declared as package globals.  Method calls are wrapped such that 
 these globals take on a local value that is correct for the specific calling
-object and the duration of the method call.  I.e. C< $self > is locally aliased
+object and the duration of the method call.  I.e. C<$self> is locally aliased
 to the calling object and properties are locally aliased to the values of the
 properties for that object.  The package globals themselves are empty and data
 are stored in a separate namespace for each package, keyed off the reference
@@ -391,7 +375,7 @@ some drawbacks.
 
 =item * 
 
-Provides $self automatically to methods without C< my $self = shift > and the
+Provides $self automatically to methods without 'C<my $self = shift>' and the
 like
 
 =item * 
@@ -409,7 +393,7 @@ the usual tortured syntax to dereference an accessor call
 =item *
 
 Properties no longer require accessors to have compile time syntax checking
-under C< use strict >
+under C<use strict>
 
 =item * 
 
@@ -451,6 +435,13 @@ approaches that use lexical closures to create strong encapsulation
 Designed for single inheritance only.  Multiple inheritance may or may not
 work depending on the exact circumstances
 
+=item *
+
+Not yet thread safe -- use of memory address as ID causes problems for existing
+objects when cloned across threads.  (Cound be fixed in a future version by
+storing a unique ID inside a blessed scalar, but this breaks ability to
+subclass any type of object.)
+
 =back
 
 =head1 USAGE
@@ -464,7 +455,7 @@ be defined)
 
 (TODO: Define object properties)
 
-Properties are declared by specifying a package variable using C< our > and an
+Properties are declared by specifying a package variable using C<our> and an
 appropriate attribute.  There are a variety of attributes (and aliases for
 attributes) available which result in different degrees of privacy and different
 rules for creating accessors and mutators.
@@ -574,7 +565,7 @@ the declaring package.  See L</Hints and Tips>.
   our $foo : Pub;     # :Pub creates an accessor and mutator
   $obj->foo;          # returns value of foo for $obj
   $obj->set_foo($val) # sets foo to $val and returns $obj
-  
+
 (TODO: define and describe)
 
 =head2 Constructors and Destructors
@@ -588,17 +579,17 @@ the declaring package.  See L</Hints and Tips>.
 I<Calling private methods on $self>
 
 Good style for private method calling in traditional Perl object-oriented
-programming is to call private methods directly, C< foo($self,@args) >, rather
+programming is to call private methods directly, C<< foo($self,@args) >>, rather
 than with method lookup, C<< $self->foo(@args) >>.  With Object::LocalVars, a
-private method should be called as C< foo(@args) > as the local aliases for $self
+private method should be called as C<< foo(@args) >> as the local aliases for $self
 and the properties are already in place.
 
 I<Avoiding hidden internal data>
 
-For a package using Object::LocalVars, e.g. C< My::Package >, object properties
-are stored in C< My::Package::DATA >, class properties are stored in 
-C< My::Package::CLASSDATA >, and methods are stored in 
-C< My::Package::METHODS >. Do not access these areas directly or overwrite 
+For a package using Object::LocalVars, e.g. C<My::Package>, object properties
+are stored in C<My::Package::DATA>, class properties are stored in 
+C<My::Package::CLASSDATA>, and methods are stored in 
+C<My::Package::METHODS>. Do not access these areas directly or overwrite 
 them with other global data or unexpected results are guaranteed to occur.
 
 =head1 METHODS TO BE WRITTEN BY A DEVELOPER
@@ -698,24 +689,29 @@ calls that individually do little property access.
 
 =head1 SEE ALSO
 
-These other modules provide similiar functionality and inspired this one.
+These other modules provide similiar functionality and inspired this one. 
+Quotes are from their respective documentations.
 
 =over
 
 =item *
 
-L<Class::Std> -- framework for inside-out objects; supports
-multiple-inheritance
+L<Class::Std> -- "provides tools that help to implement the 'inside out object'
+class structure"; based on the book I<Perl Best Practices>; nice support for
+multiple-inheritance and operator overloading
 
 =item *
 
-L<Lexical::Attributes> -- inside-out objects; provides $self and other 
-syntactic sugar via source filtering
+L<Lexical::Attributes> -- "uses a source filter to hide the details of the
+Inside-Out technique from the user"; API based on Perl6 syntax; provides 
+$self automatically to methods
 
 =item *
 
-L<Spiffy> -- a "magic foundation class" for object-oriented programming with
-lots of syntactic tricks via source filtering
+L<Spiffy> -- "combines the best parts of Exporter.pm, base.pm, mixin.pm and
+SUPER.pm into one magic foundation class"; "borrows ideas from other OO
+languages like Python, Ruby, Java and Perl 6"; optionally uses source filtering
+to provide $self automatically to methods
 
 =back
 

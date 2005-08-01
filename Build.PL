@@ -9,14 +9,12 @@ Module::Build->new(
     license         => 'perl',
     requires => {
         perl => 5.006,
-#        Sub::Uplevel => 0,     # not being used right now due to bug
-        Scalar::Util => 1.08,   # first version to support refaddr
-    },
-    build_requires  => { 
         Test::More => 0.47,
         Test::Exception => 0,   # any version has lives_ok and dies_ok
     },
+    build_requires  => { 
+    },
     meta_add => { 
-        noindex => { dir => [ qw/examples/ ] } 
+        noindex => { directory => [ qw/examples/ ] } 
     },
 )->create_build_script;

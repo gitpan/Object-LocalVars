@@ -1,8 +1,8 @@
 Build.PL
 Changes
-examples/benchmarking/egClassMethodMaker.pm
-examples/benchmarking/egHandRoll.pm
-examples/benchmarking/egObjectLocalVars.pm
+examples/benchmarking/egClassMethodMaker.pl
+examples/benchmarking/egHandRoll.pl
+examples/benchmarking/egObjectLocalVars.pl
 examples/benchmarking/objectbench.pl
 lib/Object/LocalVars.pm
 LICENSE
@@ -26,6 +26,7 @@ t/12-PREBUILD.t
 t/13-DEMOLISH.t
 t/14-privacy.t
 t/15-no-helper-inheritance.t
+t/66-threaded.t
 t/Common.pm
 t/Object/Complete.pm
 t/Object/Complete/Sub.pm

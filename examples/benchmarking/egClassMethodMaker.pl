@@ -13,12 +13,13 @@ use Class::MethodMaker (
 );
 
 sub crunch {
-    my $self = shift;
-    $self->set_prop1(rand);
-    $self->set_prop2(rand);
-    $self->set_prop3(rand);
-    $self->set_prop4(rand);
-    return $self->prop1 + $self->prop2 + $self->prop3 + $self->prop4;
+    my ($self, $n) = @_;
+    $n = 1 if $n < 1;
+    my $sum = 0;
+    while ($n--) {
+        $self->set_prop1(1);
+        $sum += $self->prop1;
+    }
 }
 
 1;

@@ -6,27 +6,27 @@ SYNOPSIS
       package My::Object;
       use strict;
       use Object::LocalVars;
-
+ 
       give_methods our $self;  # this exact line is required
-
+ 
       our $field1 : Prop;
       our $field2 : Prop;
-
+ 
       sub as_string : Method { 
         return "$self has properties '$field1' and '$field2'";
       }
-  
+
 DESCRIPTION
     *This is an early development release. Documentation is incomplete and
     the API may change. Do not use for production purposes. Comments
     appreciated.*
 
     This module helps developers create "outside-in" objects. Properties
-    (and ` $self ') are declared as package globals. Method calls are
-    wrapped such that these globals take on a local value that is correct
-    for the specific calling object and the duration of the method call.
-    I.e. ` $self ' is locally aliased to the calling object and properties
-    are locally aliased to the values of the properties for that object. The
+    (and `$self') are declared as package globals. Method calls are wrapped
+    such that these globals take on a local value that is correct for the
+    specific calling object and the duration of the method call. I.e.
+    `$self' is locally aliased to the calling object and properties are
+    locally aliased to the values of the properties for that object. The
     package globals themselves are empty and data are stored in a separate
     namespace for each package, keyed off the reference addresses of the
     objects.
@@ -47,7 +47,7 @@ DESCRIPTION
 
   Features
 
-    *   Provides $self automatically to methods without ` my $self = shift '
+    *   Provides $self automatically to methods without '`my $self = shift''
         and the like
 
     *   Provides dynamic aliasing of properties within methods -- methods
@@ -60,7 +60,7 @@ DESCRIPTION
         without the usual tortured syntax to dereference an accessor call
 
     *   Properties no longer require accessors to have compile time syntax
-        checking under ` use strict '
+        checking under `use strict'
 
     *   Uses attributes to mark properties and methods, but only in the
         BEGIN phase so should be mod_perl friendly (though I haven't tested
@@ -87,6 +87,11 @@ DESCRIPTION
     *   Designed for single inheritance only. Multiple inheritance may or
         may not work depending on the exact circumstances
 
+    *   Not yet thread safe -- use of memory address as ID causes problems
+        for existing objects when cloned across threads. (Cound be fixed in
+        a future version by storing a unique ID inside a blessed scalar, but
+        this breaks ability to subclass any type of object.)
+
 USAGE
   Overview
 
@@ -97,10 +102,10 @@ USAGE
 
     (TODO: Define object properties)
 
-    Properties are declared by specifying a package variable using ` our '
-    and an appropriate attribute. There are a variety of attributes (and
-    aliases for attributes) available which result in different degrees of
-    privacy and different rules for creating accessors and mutators.
+    Properties are declared by specifying a package variable using `our' and
+    an appropriate attribute. There are a variety of attributes (and aliases
+    for attributes) available which result in different degrees of privacy
+    and different rules for creating accessors and mutators.
 
     (TODO: Discuss aliasing)
 
@@ -212,7 +217,7 @@ USAGE
       our $foo : Pub;     # :Pub creates an accessor and mutator
       $obj->foo;          # returns value of foo for $obj
       $obj->set_foo($val) # sets foo to $val and returns $obj
-  
+
     (TODO: define and describe)
 
   Constructors and Destructors
@@ -226,18 +231,18 @@ USAGE
     *Calling private methods on $self*
 
     Good style for private method calling in traditional Perl
-    object-oriented programming is to call private methods directly, `
-    foo($self,@args) ', rather than with method lookup, `$self->foo(@args)'.
-    With Object::LocalVars, a private method should be called as `
-    foo(@args) ' as the local aliases for $self and the properties are
+    object-oriented programming is to call private methods directly,
+    `foo($self,@args)', rather than with method lookup, `$self->foo(@args)'.
+    With Object::LocalVars, a private method should be called as
+    `foo(@args)' as the local aliases for $self and the properties are
     already in place.
 
     *Avoiding hidden internal data*
 
-    For a package using Object::LocalVars, e.g. ` My::Package ', object
-    properties are stored in ` My::Package::DATA ', class properties are
-    stored in ` My::Package::CLASSDATA ', and methods are stored in `
-    My::Package::METHODS '. Do not access these areas directly or overwrite
+    For a package using Object::LocalVars, e.g. `My::Package', object
+    properties are stored in `My::Package::DATA', class properties are
+    stored in `My::Package::CLASSDATA', and methods are stored in
+    `My::Package::METHODS'. Do not access these areas directly or overwrite
     them with other global data or unexpected results are guaranteed to
     occur.
 
@@ -338,16 +343,20 @@ BENCHMARKING
 
 SEE ALSO
     These other modules provide similiar functionality and inspired this
-    one.
+    one. Quotes are from their respective documentations.
 
-    *   Class::Std -- framework for inside-out objects; supports
-        multiple-inheritance
+    *   Class::Std -- "provides tools that help to implement the 'inside out
+        object' class structure"; based on the book *Perl Best Practices*;
+        nice support for multiple-inheritance and operator overloading
 
-    *   Lexical::Attributes -- inside-out objects; provides $self and other
-        syntactic sugar via source filtering
+    *   Lexical::Attributes -- "uses a source filter to hide the details of
+        the Inside-Out technique from the user"; API based on Perl6 syntax;
+        provides $self automatically to methods
 
-    *   Spiffy -- a "magic foundation class" for object-oriented programming
-        with lots of syntactic tricks via source filtering
+    *   Spiffy -- "combines the best parts of Exporter.pm, base.pm, mixin.pm
+        and SUPER.pm into one magic foundation class"; "borrows ideas from
+        other OO languages like Python, Ruby, Java and Perl 6"; optionally
+        uses source filtering to provide $self automatically to methods
 
 INSTALLATION
     The following commands will build, test, and install this module:
