@@ -27,6 +27,7 @@ t/13-DEMOLISH.t
 t/14-privacy.t
 t/15-no-helper-inheritance.t
 t/66-threaded.t
+t/67-forking.t
 t/Common.pm
 t/Object/Complete.pm
 t/Object/Complete/Sub.pm

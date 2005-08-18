@@ -2,15 +2,50 @@ package Object::LocalVars;
 use 5.006;
 use strict;
 use warnings;
-our $VERSION = "0.12";
 
+our $VERSION = "0.13";
+
+#--------------------------------------------------------------------------#
 # Required modules
-use Carp;
+#--------------------------------------------------------------------------#
 
-# Exporting
-use Exporter 'import';
-our @EXPORT = qw(   caller give_methods new DESTROY 
-                    MODIFY_SCALAR_ATTRIBUTES MODIFY_CODE_ATTRIBUTES );
+use Config;
+use Carp;
+use Scalar::Util qw( weaken );
+
+#--------------------------------------------------------------------------#
+# Exporting -- wrap import so we can check for necessary warnings
+#--------------------------------------------------------------------------#
+
+use Exporter;
+
+our @EXPORT = qw(   
+    caller give_methods new DESTROY CLONE
+    MODIFY_SCALAR_ATTRIBUTES MODIFY_CODE_ATTRIBUTES 
+);
+
+sub import {
+
+    # check if threads are available
+    if( $Config{useithreads} ) {
+        my $caller = caller(0);
+        
+        # Perl < 5.8 doesn't use CLONE, which we need if threads are in use
+        if ( $] < 5.008 && $INC{'threads.pm'} ) {
+            carp "Warning: Object::LocalVars thread support requires perl 5.8";
+        }
+        
+        # Warn about sharing, but not for Test:: modules which always
+        # share if any threads are enabled
+        if ( $INC{'threads/shared.pm'} && ! $INC{'Test/Builder.pm'} ) {
+            carp   "Warning: threads::shared is enabled, but $caller uses"
+                 . " Object::LocalVars (which does not allow shared objects)";
+        }
+    }
+    
+    # Hand off the rest of the import
+    goto &Exporter::import;
+}
 
 #--------------------------------------------------------------------------#
 # Declarations
@@ -70,9 +105,34 @@ sub new {
     }
     $self = \(my $scalar) unless $self;
     bless $self, $class;
+    my $addr = Object::LocalVars::_ident $self;
+    ${$class . "::TRACKER"}{$addr} = $self;
+    weaken ${$class . "::TRACKER"}{$addr}; # don't let this stop destruction
     
     $self->BUILD(@_) if defined *{$class."::BUILD"}{CODE};
     return $self;
+}
+
+#--------------------------------------------------------------------------#
+# CLONE
+#--------------------------------------------------------------------------#
+
+sub CLONE {
+    no strict 'refs';
+    my $class = shift;
+    for my $old_obj_id ( keys %{$class . "::TRACKER"} ) {
+        my $new_obj_id = Object::LocalVars::_ident(
+            ${$class . "::TRACKER"}{$old_obj_id}
+        );
+        for my $prop ( keys %{"${class}::DATA::"} ) {
+            my $qualified_name = $class . "::DATA::$prop";
+            $$qualified_name{ $new_obj_id } = $$qualified_name{ $old_obj_id };
+            delete $$qualified_name{ $old_obj_id };
+        }
+        ${$class . "::TRACKER"}{$new_obj_id} = $new_obj_id;
+        delete ${$class . "::TRACKER"}{$old_obj_id};
+    }
+    return 1;
 }
 
 #--------------------------------------------------------------------------#
@@ -88,6 +148,7 @@ sub DESTROY {
     for ( keys %{"${class}::DATA::"} ) {
         delete (${"${class}::DATA::$_"}{$addr});
     }
+    delete ${$class . "::TRACKER"}{$addr};
     for ( @{"${class}::ISA"} ) {
         if ( $_->can("DESTROY") ) {
             bless ($self, $_);
@@ -129,83 +190,27 @@ sub MODIFY_SCALAR_ATTRIBUTES {
     for my $attr (@attrs) {
         no strict 'refs';
         if ($attr eq "Pub") {
-            my $symbol = _findsym($OL_PACKAGE, $referent) or die;
-            my $OL_NAME = *{$symbol}{NAME};
-            ${$OL_PACKAGE."::DATA::".$OL_NAME} = {}; # make it exist
-            *{$OL_PACKAGE."::".$OL_NAME} =
-                sub { 
-                    return ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0] )};
-                };
-            *{$OL_PACKAGE."::set_".$OL_NAME} =
-                sub { 
-                    ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0] )} = $_[1];
-                    return $_[0];
-                };
+            _install_accessors( $OL_PACKAGE, $referent, "public", 0 );
             undef $attr;
         } 
         elsif ($attr eq "Prot") {
-            my $symbol = _findsym($OL_PACKAGE, $referent) or die;
-            my $OL_NAME = *{$symbol}{NAME};
-            ${$OL_PACKAGE."::DATA::".$OL_NAME} = {}; # make it exist
-            *{$OL_PACKAGE."::".$OL_NAME} = sub { 
-                my ($caller,undef,undef,$fcn) = caller(0);
-                croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
-                    unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
-                return ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0])};
-    
-            };
-            *{$OL_PACKAGE."::set_$OL_NAME"} = sub { 
-                my ($caller,undef,undef,$fcn) = caller(0);
-                croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
-                    unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
-                ${$OL_PACKAGE."::DATA::".$OL_NAME}{Object::LocalVars::_ident( $_[0])} = $_[1];
-                return $_[0];
-            };
+            _install_accessors( $OL_PACKAGE, $referent, "protected", 0 );
             undef $attr;
         }
         elsif ( $attr =~ /^(?:Prop|Priv)$/ ) {
-            my $symbol = _findsym($OL_PACKAGE, $referent) or die;
-            my $OL_NAME = *{$symbol}{NAME};
-            ${$OL_PACKAGE."::DATA::".$OL_NAME} = {}; # make it exist
-            # no accessors installed for private 
+            _install_accessors( $OL_PACKAGE, $referent, "private", 0 );
             undef $attr;
         }
         elsif ($attr =~ /^(?:Class|ClassPriv)$/ ) {
-            my $symbol = _findsym($OL_PACKAGE, $referent) or die;
-            my $OL_NAME = *{$symbol}{NAME};
-            ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = undef; # make it exist
+            _install_accessors( $OL_PACKAGE, $referent, "private", 1 );
             undef $attr;
         }
         elsif ($attr =~ /^(?:ClassProt)$/ ) {
-            my $symbol = _findsym($OL_PACKAGE, $referent) or die;
-            my $OL_NAME = *{$symbol}{NAME};
-            ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = undef; # make it exist
-            *{$OL_PACKAGE."::".$OL_NAME} = sub { 
-                my ($caller,undef,undef,$fcn) = caller(0);
-                croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
-                    unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
-                return ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME};
-            };
-            *{$OL_PACKAGE."::set_$OL_NAME"} = sub { 
-                my ($caller,undef,undef,$fcn) = caller(0);
-                croak "$OL_NAME is a protected property and can't be read from $fcn in $caller" 
-                    unless UNIVERSAL::isa( $caller, $OL_PACKAGE );
-                ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = $_[1];
-                return $_[0];
-            };
+            _install_accessors( $OL_PACKAGE, $referent, "protected", 1 );
             undef $attr;
         }
         elsif ($attr =~ /^(?:ClassPub)$/ ) {
-            my $symbol = _findsym($OL_PACKAGE, $referent) or die;
-            my $OL_NAME = *{$symbol}{NAME};
-            ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = undef; # make it exist
-            *{$OL_PACKAGE."::".$OL_NAME} = sub { 
-                return ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME};
-            };
-            *{$OL_PACKAGE."::set_$OL_NAME"} = sub { 
-                ${$OL_PACKAGE."::CLASSDATA"}{$OL_NAME} = $_[1];
-                return $_[0];
-            };
+            _install_accessors( $OL_PACKAGE, $referent, "public", 1 );
             undef $attr;
         }
     }
@@ -230,6 +235,18 @@ sub _findsym {
 }
 
 #--------------------------------------------------------------------------#
+# _gen_accessor
+#--------------------------------------------------------------------------#
+
+sub _gen_accessor {
+    my ($package, $name, $classwide) = @_;
+    return $classwide 
+        ? "return \$${package}::CLASSDATA{${name}}"
+        : "return \$${package}::DATA::${name}" .
+          "{Object::LocalVars::_ident( \$_[0] )}" ;
+}
+
+#--------------------------------------------------------------------------#
 # _gen_class_locals
 #--------------------------------------------------------------------------#
 
@@ -237,11 +254,27 @@ sub _gen_class_locals {
     no strict 'refs';
     my $package = shift;
     my $evaltext = "";
-    for ( keys %{$package."::CLASSDATA"} ) {
-        $evaltext .= 
-            "local *{'${package}::$_'} = \\\${'${package}::CLASSDATA'}{$_};";
-    }
+    my @props = keys %{$package."::CLASSDATA"};
+    return "" unless @props;
+    my @globs = map { "*${package}::$_" } @props;
+    my @refs = map { "\\\$${package}::CLASSDATA{$_}" } @props;
+    $evaltext .= "  local ( " .  join(", ", @globs) .  " ) = ( " .
+                   join(", ", @refs) . " );\n";
     return $evaltext;
+}
+
+#--------------------------------------------------------------------------#
+# _gen_mutator
+#--------------------------------------------------------------------------#
+
+sub _gen_mutator {
+    my ($package, $name, $classwide) = @_;
+    return $classwide
+        ? "\$${package}::CLASSDATA{${name}} = \$_[1];\n" .
+          "return \$_[0] "
+        : "\$${package}::DATA::${name}" .
+          "{Object::LocalVars::_ident( \$_[0] )} = \$_[1];\n" .
+          "return \$_[0]";
 }
 
 #--------------------------------------------------------------------------#
@@ -251,12 +284,14 @@ sub _gen_class_locals {
 sub _gen_object_locals {
     no strict 'refs';
     my $package = shift;
-    my $evaltext = "my \$id; 
-                    \$id = Object::LocalVars::_ident(\$obj) if ref(\$obj);";
-    for ( keys %{$package."::DATA::"} ) {
-        $evaltext .= "\$id and local *{'${package}::$_'} = " .
-                     "\\\${'${package}::DATA::$_'}{\$id};";
-    }
+    my @props = keys %{$package."::DATA::"};
+    return "" unless @props;
+    my $evaltext = "  my \$id;\n"; # need to define it
+    $evaltext .= "  \$id = Object::LocalVars::_ident(\$obj) if ref(\$obj);\n";
+    my @globs = map { "*${package}::$_" } @props;
+    my @refs = map { "\\\$${package}::DATA::$_ {\$id}" } @props;
+    $evaltext .= "  local ( " .  join(", ", @globs) .  " ) = ( " .
+                   join(", ", @refs) . " ) if \$id;\n";
     return $evaltext;
 }
 
@@ -270,21 +305,21 @@ sub _gen_privacy {
         /public/    && do { return "" };
 
         /protected/ && do { return 
-            "my (\$caller) = caller();
-            croak q/$name is a protected method and can't be called from ${package}/
-                unless UNIVERSAL::isa( \$caller, '$package' );"
+            "  my (\$caller) = caller();\n" .
+            "  croak q/$name is a protected method and can't be called from ${package}/\n".
+            "    unless \$caller->isa( '$package' );\n"
         };
 
         /private/ && do { return
-            "my (\$caller) = caller();
-            croak q/$name is a private method and can't be called from ${package}/
-                unless \$caller eq '$package';"
+            "  my (\$caller) = caller();\n" .
+            "  croak q/$name is a private method and can't be called from ${package}/\n".
+            "    unless \$caller eq '$package';\n"
         };
     }
 }
 
 #--------------------------------------------------------------------------#
-# ident
+# _ident
 #--------------------------------------------------------------------------#
 
 sub _ident {
@@ -292,26 +327,66 @@ sub _ident {
 }
 
 #--------------------------------------------------------------------------#
+# _install_accessors
+#--------------------------------------------------------------------------#
+
+sub _install_accessors {
+    my ($package,$scalarref,$privacy,$classwide) = @_;
+    no strict 'refs';
+
+    # find name from reference
+    my $symbol = _findsym($package, $scalarref) or die;
+    my $name = *{$symbol}{NAME};
+
+    # make the property exist to be found by give_methods()
+    if ($classwide) {  
+        ${$package."::CLASSDATA"}{$name} = undef;
+    }
+    else {
+        %{$package."::DATA::".$name} = ();
+    }
+
+    # install accessors
+    return if $privacy eq "private"; # unless private 
+    my $evaltext = 
+            "*${package}::${name} = sub { \n" .
+                _gen_privacy( $package, $name, $privacy ) .
+                _gen_accessor( $package, $name, $classwide ) .
+            "\n}; \n\n" .
+            "*${package}::set_${name} = sub { \n" .
+                _gen_privacy( $package, "set_$name", $privacy ) .
+                _gen_mutator( $package, $name, $classwide ) .
+            "\n}; "
+    ; # my
+    # XXX print "\n\n$evaltext\n\n";
+    eval $evaltext;
+    die $@ if $@;
+    return;
+}    
+
+#--------------------------------------------------------------------------#
 # _install_wrapper
 #--------------------------------------------------------------------------#
 
 sub _install_wrapper {
+    my ($package,$coderef,$privacy) = @_;
     no strict 'refs';
     no warnings 'redefine';
-    my ($package,$coderef,$privacy) = @_;
     my $symbol = _findsym($package, $coderef) or die;
     my $name = *{$symbol}{NAME};
     *{$package."::METHODS::$name"} = $coderef;
-    eval " *{'${package}::${name}'} = sub { 
-            my \$obj = shift;" .
+    my $evaltext = "*${package}::${name} = sub {\n". 
+            "  my \$obj = shift;\n" .
             _gen_privacy( $package, $name, $privacy ) .
-            "local \${'${package}::self'} = \$obj; " .
+            "  local \$${package}::self = \$obj;\n" .
             _gen_class_locals($package) .
             _gen_object_locals($package) .
-            "local \$Carp::CarpLevel = \$Carp::CarpLevel + 2;
-            \&{'${package}::METHODS::${name}'}(\@_);
-        }"
-    ; # eval
+            "  local \$Carp::CarpLevel = \$Carp::CarpLevel + 2;\n".
+            "  ${package}::METHODS::${name}(\@_);\n".
+        "}\n"
+    ; # my
+    # XXX print "\n\n$evaltext\n\n";
+    eval $evaltext;
     die $@ if $@;
     return;
 }
@@ -366,7 +441,7 @@ in the central data store.
 
 Unlike with "inside-out" objects, the use of package variables for 
 "outside-in" objects allows for the use of local symbol table manipulation.
-This allows Object::LocalVars to deliver a variety of features -- though with
+As a result, Object::LocalVars to deliver a variety of features -- though with
 some drawbacks.
 
 =head2 Features
@@ -414,6 +489,11 @@ Does not use source filtering
 Orthogonality -- can subclass just about any other class, regardless of
 implementation.  (Also a nice feature of some "inside-out" implementations)
 
+=item *
+
+Minimally thread-safe under a recent release of Perl 5.8 -- objects are 
+cloned across thread boundaries (or a C<fork> on Win32)
+
 =back
 
 =head2 Drawbacks
@@ -437,10 +517,9 @@ work depending on the exact circumstances
 
 =item *
 
-Not yet thread safe -- use of memory address as ID causes problems for existing
-objects when cloned across threads.  (Cound be fixed in a future version by
-storing a unique ID inside a blessed scalar, but this breaks ability to
-subclass any type of object.)
+Does not support threads::shared -- objects existing before a new thread is
+created will persist into the new thread, but changes in an object cannot be
+reflected in the corresponding object in the other thread
 
 =back
 
@@ -689,10 +768,16 @@ calls that individually do little property access.
 
 =head1 SEE ALSO
 
-These other modules provide similiar functionality and inspired this one. 
+These other modules provide similiar functionality and/or inspired this one. 
 Quotes are from their respective documentations.
 
 =over
+
+=item *
+
+L<Attribute::Property> -- "easy lvalue accessors with validation"; uses
+attributes to mark object properties for accessors; validates lvalue usage
+with a hidden tie
 
 =item *
 

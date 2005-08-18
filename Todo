@@ -4,9 +4,6 @@ TODO list for Perl module Object::LocalVars
 # Bugs to squash
 #--------------------------------------------------------------------------#
 
-- DESTROY rebless shouldn't assume first @ISA can also DESTROY; need to find
-  an @ISA that can DESTROY or else just forget about it
-
 #--------------------------------------------------------------------------#
 # Tests to write
 #--------------------------------------------------------------------------#
@@ -14,7 +11,7 @@ TODO list for Perl module Object::LocalVars
 - test same-named class properties
 
 #--------------------------------------------------------------------------#
-# Features for next release
+# Features for release soon
 #--------------------------------------------------------------------------#
 
 - read/only attribute
@@ -22,31 +19,32 @@ TODO list for Perl module Object::LocalVars
 - update benchmarks
 
 #--------------------------------------------------------------------------#
-# Features for the future for additional functionality
+# Potential incremental improvements
 #--------------------------------------------------------------------------#
 
+- user selectable accessor style (get_prop, set_prop)
 - synonyms for :Prop (:Property :P) and :Method (:Meth :M) etc
 - @array and %hash with :Prop, etc. attributes
 - automethods
 - naming $self as something else
 - "super" like Spiffy does(?)
-- mixin support(?)
-- thread safety -- use Data::Uniqid to generate ID and store in blessed
-  scalar as the object ID  (but not as default -- need an import option
-  to do it this way because of speed penalty)
+- mixin/trait support(?)
 
 #--------------------------------------------------------------------------#
-# Other changes to make
+# Ideas involving substantial API or structural change
 #--------------------------------------------------------------------------#
 
-- refactor all code generators to eval the right thing into place with
-  less duplicate code all over the source.  (Build up string to eval in 
-  stages if some parts like caller checking are optional).
+- switch from package globals for storing data to closures containing anonymous
+  globrefs
 
-- eventually, "eval" the wrapper function with all the right calls to local
-  once, and then make each stub function call the wrapper with the target
-  coderef -- effectively unrolls recursion and should keep the wrapper 
-  inefficiency constant as the number of properties increases
+- private subs -- have to be careful how these are used.  Don't really need to
+  have Method marker because wrapper should be in place when called from some
+  public interface, but this is somewhat inconsistent.  Should they have a
+  wrapper that just checks that they are called privately and doesn't alias?
+  Or check if the first argument is an object?  DWIM or danger here?
+
+- thread shared objects -- use Data::Uniqid or Data::UUID or equivalent to
+  generate ID and store in a registry table (See below for ideas)
 
 #--------------------------------------------------------------------------#
 # Style thoughts -- refine for POD?
@@ -58,12 +56,11 @@ methods.  Not really necessary, but sets them apart just a bit and signals that
 they are different.  (Sort of like $.name, etc. in Perl6) Or is this overkill?
 If warnings are on, "our $name : Prop; my $name" will issue a warning anyway.
 
-Accessor style -- using name() and set_name().  ( Apparently, Perl Best
-Practices endorses this -- have to see the logic there. ) Also, if I ever want
-to use name(index) or name(key) for @array and %hash property accessors, then I
-need to not use name(val) to set scalars.  set_name should return the object,
-to allow chaining.  This may give a reason to *avoid* underscores, as set__name
-is probably error-prone.
+Write about accessor style -- using name() and set_name().  If I ever
+want to use name(index) or name(key) for @array and %hash property accessors,
+then I need to not use name(val) to set scalars.  set_name should return the
+object, to allow chaining.  This may give a reason to *avoid* underscores, as
+set__name is probably error-prone.
 
 Mutators should be (to paraphrase Bill Clinton) "safe, legal and rare" so
 maybe this doesn't matter much in the end.
@@ -119,27 +116,30 @@ Summary for methods:
 # Thoughts on thread safety
 #--------------------------------------------------------------------------#
 
-Major issue is that refaddr can't be used to key the property hashes.  Changing
-that to a unique ID stored in the blessed scalar makes it thread-safe at least
-in that spawning a new thread doesn't screw up.  (Data::Uniqid seems portable,
-though probably not as fast as XS versions like Data::UUID and Win32API::GUID)
+Problem of using refaddr has been solved since 0.13 using CLONE.
 
-Sharing objects across threads seems much trickier.  First, the package
-globals holding data all need to be shared.  Next, access has to be coordinated
-could be done with semphors in the wrapper, but that blocks everything until 
-the method exits.  Alternatively, maybe declare all properties as protected
-(or even, say, :Shared and get no property aliasing) and only use accessors
-to manipulate data.  Accessors can lock the target before reading/writing.  
-Still ugly if accessing an array or hash-ref -- the method will have to
-lock that, too, I think, or will have to get/store. Alias of $self should 
-still be OK, as that's just aliasing a subroutine argument within the same
-thread.
+Sharing objects across threads seems much trickier.  First, the package globals
+holding data all need to be shared.  Next, access has to be coordinated could
+be done with semaphors in the wrapper or locking the object tracker hash, but
+that blocks everything on that object until the method exits.  Accessors can
+lock the target before reading/writing the same way.  Still ugly if accessing
+an array or hash-ref -- the method will have to lock that, too, I think, or
+will have to get/store.  Alias of $self should still be OK, as that's just
+aliasing a subroutine argument within the same thread.
 
-New objects created in one thread will still have data available in other
-threads due to shared data storage hashes, but won't be easily accessable.
-Would need to have a way to have a thread pass or return an object UUID to
-allow another thread to know what to manipulate.  Object destruction also
-becomes a major issue -- can't destroy when the reference count goes to 
-zero because the UUID exists in the other thread.  Have to disable DESTROY and 
-have users manually destroy UUIDs when they are done with them.
+Smart thing to do is have Object::LocalVars automatically install the right
+versions of locking/sharing subs or otherwise based on whether 
+%INC{"threads/shared.pm"} is defined.
+
+Other potential snags:
+
+- New objects created in one thread will still have data available in other
+  threads due to shared data storage hashes, but won't be easily accessable.
+  Would need to have a way to have a thread pass or return an object UUID to
+  allow another thread to know what to manipulate.
+
+- Object destruction also becomes an issue -- can't destroy data when the
+  reference count goes to zero because the object might exists in the other
+  thread.  Have to disable DESTROY and have users manually destroy UUIDs when
+  they are done with them, or have to keep object counts during CLONE, etc.
 

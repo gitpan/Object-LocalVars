@@ -1,5 +1,24 @@
 Revision history for Perl module Object::LocalVars
 
+0.13 Thu Aug 18 07:00:16 EDT 2005
+    - Added CLONE method and supporting structures for thread-creation safety
+    - Need Scalar::Util again for weaken() for CLONE support
+    - Minor optimizations on localization
+    - Cleaned up eval text for wrapper
+    - Refactored accessor and mutator generation
+    - Updated Build_PL requirements again to get a Test::Exception version 
+      that builds cleanly and a Test::More version that is thread-safe
+    - POD fixes in various places
+    - Manually import Exporter's import() for perls before 5.8.x when it
+      was supported by Exporter itself
+    - DESTROY no longer assumes the first superclass can DESTROY, but 
+      finds the first superclass in @ISA that can DESTROY, blesses to that
+      and lets Perl handle the subsequent destruction call.  (Shouldn't be
+      using multiple inheritance with this anyway, but just to be safe...)
+    - Switched to using $obj->isa() style on privacy checks
+    - Added warnings about threads and threads::shared for perl < 5.8
+    - Skips thread tests for perls earlier than 5.8
+    
 0.12 Sun Jul 31 23:11:18 EDT 2005
     - eliminated need for Scalar::Util for refaddr
     - moved build_requires to requires to workaround CPANPLUS bug

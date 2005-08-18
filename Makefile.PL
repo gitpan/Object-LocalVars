@@ -8,8 +8,9 @@ WriteMakefile
           'EXE_FILES' => [],
           'VERSION_FROM' => 'lib/Object/LocalVars.pm',
           'PREREQ_PM' => {
-                           'Test::More' => '0.47',
-                           'Test::Exception' => 0
+                           'Test::More' => '0.48',
+                           'Scalar::Util' => '1.09',
+                           'Test::Exception' => '0.21'
                          }
         )
 ;

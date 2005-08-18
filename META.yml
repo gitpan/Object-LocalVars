@@ -1,6 +1,6 @@
 ---
 name: Object-LocalVars
-version: 0.12
+version: 0.13
 author:
   - David A Golden <dagolden@cpan.org>
 abstract: |-
@@ -8,13 +8,14 @@ abstract: |-
   variables
 license: perl
 requires:
-  Test::Exception: 0
-  Test::More: 0.47
+  Scalar::Util: 1.09
+  Test::Exception: 0.21
+  Test::More: 0.48
   perl: 5.006
 provides:
   Object::LocalVars:
     file: lib/Object/LocalVars.pm
-    version: 0.12
+    version: 0.13
 generated_by: Module::Build version 0.2702
 noindex:
   directory:

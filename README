@@ -42,7 +42,7 @@ DESCRIPTION
 
     Unlike with "inside-out" objects, the use of package variables for
     "outside-in" objects allows for the use of local symbol table
-    manipulation. This allows Object::LocalVars to deliver a variety of
+    manipulation. As a result, Object::LocalVars to deliver a variety of
     features -- though with some drawbacks.
 
   Features
@@ -75,6 +75,9 @@ DESCRIPTION
         of implementation. (Also a nice feature of some "inside-out"
         implementations)
 
+    *   Minimally thread-safe under a recent release of Perl 5.8 -- objects
+        are cloned across thread boundaries (or a `fork' on Win32)
+
   Drawbacks
 
     *   Method efficiency -- wrappers around methods create extra overhead
@@ -87,10 +90,10 @@ DESCRIPTION
     *   Designed for single inheritance only. Multiple inheritance may or
         may not work depending on the exact circumstances
 
-    *   Not yet thread safe -- use of memory address as ID causes problems
-        for existing objects when cloned across threads. (Cound be fixed in
-        a future version by storing a unique ID inside a blessed scalar, but
-        this breaks ability to subclass any type of object.)
+    *   Does not support threads::shared -- objects existing before a new
+        thread is created will persist into the new thread, but changes in
+        an object cannot be reflected in the corresponding object in the
+        other thread
 
 USAGE
   Overview
@@ -342,8 +345,12 @@ BENCHMARKING
     access.
 
 SEE ALSO
-    These other modules provide similiar functionality and inspired this
+    These other modules provide similiar functionality and/or inspired this
     one. Quotes are from their respective documentations.
+
+    *   Attribute::Property -- "easy lvalue accessors with validation"; uses
+        attributes to mark object properties for accessors; validates lvalue
+        usage with a hidden tie
 
     *   Class::Std -- "provides tools that help to implement the 'inside out
         object' class structure"; based on the book *Perl Best Practices*;

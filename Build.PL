@@ -9,8 +9,9 @@ Module::Build->new(
     license         => 'perl',
     requires => {
         perl => 5.006,
-        Test::More => 0.47,
-        Test::Exception => 0,   # any version has lives_ok and dies_ok
+        Scalar::Util => 1.09, # first appearance of refaddr()
+        Test::More => 0.48, # thread safe
+        Test::Exception => 0.21,  # 0.20 doesn't build well 
     },
     build_requires  => { 
     },

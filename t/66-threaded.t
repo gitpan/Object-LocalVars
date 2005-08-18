@@ -3,7 +3,6 @@ use strict;
 use warnings;
 use blib;  
 use threads;
-use threads::shared;
 use Config;
 use Test::More;
 use t::Common;
@@ -14,22 +13,24 @@ Test::More->builder->failure_output(*STDOUT)
 my $class = "t::Object::Complete";
 
 if ( $Config{useithreads} ) {
-    plan 'no_plan';
+    if( $] < 5.008 ) {
+        plan skip_all => "thread support requires perl 5.8";
+    }
+    else {
+        plan tests => 4;
+    }
 }
 else {
-    plan skip_all => "Perl ithreads not available"
+    plan skip_all => "perl ithreads not available";
 }
-
 
 my $o = test_constructor($class, name => "Charlie" );
 
-TODO: {
-    local $TODO = "thread-safety";
+my $thr = threads->new( 
+    sub { 
+        is( $o->name, "Charlie", "got right name in thread") 
+    } 
+);
 
-    my $thr = threads->new( sub { 
-            is( $o->name, "Charlie", "got right name in thread") 
-    } );
-
-    $thr->join;
-}
+$thr->join;
 
