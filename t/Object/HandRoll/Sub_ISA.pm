@@ -1,6 +1,7 @@
-package t::Object::HandRoll::Sub;
+package t::Object::HandRoll::Sub_ISA;
 use strict;
 use warnings;
+use base 't::Object::HandRoll';
 use Object::LocalVars;
 Object::LocalVars->base_object( 't::Object::HandRoll' );
 

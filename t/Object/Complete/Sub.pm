@@ -8,6 +8,17 @@ give_methods our $self;
 
 our $color : Pub; # overrides super class definition -- dangerous
 our $shape : Pub;
+our $_count : Class;
+
+sub BUILD : Method {
+    ++$_count; 
+}
+
+sub DEMOLISH : Method {
+    --$_count;
+}
+
+sub get_subcount : Method { return $_count }
 
 sub desc : Method {
     return "I'm " . $self->name . 

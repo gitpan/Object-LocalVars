@@ -10,7 +10,7 @@ use t::Common;
 Test::More->builder->failure_output(*STDOUT) 
     if ($^O eq 'MSWin32' && $ENV{HARNESS_VERBOSE});
 
-plan tests => 2 * TC() + 25;
+plan tests => 2 * TC() + 31;
 
 my $class = "t::Object::Privacy";
 my $subclass = "t::Object::Privacy::Sub";
@@ -19,9 +19,9 @@ my $o = test_constructor($class);
 my $p = test_constructor($subclass);
 
 SKIP: {
-    skip "because we don't have a $class object", 25
+    skip "because we don't have a $class object", 31
         unless $o;
-    skip "because we don't have a $subclass object", 25  
+    skip "because we don't have a $subclass object", 31  
         unless $p;
     # public
     lives_ok { $o->default_meth } 
@@ -77,6 +77,19 @@ SKIP: {
         "... and private property aliases manipulations working");
     lives_ok { $o->private_meth_lives } 
         "call private method from class lives";
+
+    # readonly
+    dies_ok { $o->set_readonly_prop( 1 ) } 
+        "call readonly property mutator should die";
+    lives_ok { $p->set_readonly_super_prop( 1 ) } 
+        "call readonly property mutator from subclass lives";
+    is( $p->readonly_prop, 1, "... and readonly property is correct");
+    dies_ok { $o->set_class_readonly_prop( 1 ) } 
+        "call readonly property mutator should die";
+    lives_ok { $p->set_class_readonly_super_prop( 1 ) } 
+        "call readonly property mutator from subclass lives";
+    is( $p->class_readonly_prop, 1, "... and readonly property is correct");
+    
 }
 
 

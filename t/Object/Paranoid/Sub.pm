@@ -9,7 +9,7 @@ give_methods our $self;
 our $color : Pub;
 
 sub PREBUILD {
-    my %input = @_;
+    my ($super, %input) = @_;
     return exists $input{name} ? (name => $input{name}) : ();
 }
 

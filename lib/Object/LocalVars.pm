@@ -3,7 +3,7 @@ use 5.006;
 use strict;
 use warnings;
 
-our $VERSION = "0.13";
+our $VERSION = "0.14";
 
 #--------------------------------------------------------------------------#
 # Required modules
@@ -20,7 +20,7 @@ use Scalar::Util qw( weaken );
 use Exporter;
 
 our @EXPORT = qw(   
-    caller give_methods new DESTROY CLONE
+    caller give_methods new BUILDALL CLONE DESTROY 
     MODIFY_SCALAR_ATTRIBUTES MODIFY_CODE_ATTRIBUTES 
 );
 
@@ -52,6 +52,35 @@ sub import {
 #--------------------------------------------------------------------------#
                     
 my (%public_methods, %protected_methods, %private_methods);
+
+my %base_class_of;
+
+#--------------------------------------------------------------------------#
+# base_object
+#--------------------------------------------------------------------------#
+
+sub base_object {
+    no strict 'refs';
+    my (undef, $base) = @_;
+    my $class = caller(0);
+    $base_class_of{ $class } = $base;
+    
+    # import it if not already in @ISA
+    if ( ! grep { $_ eq $base } @{$class."::ISA"} ) {
+        push @{$class."::ISA"}, $base;
+        $base =~ s{::}{/}g;
+        $base .= ".pm";
+        eval { require $base };
+        croak $@ if $@ ne '';
+    }
+
+    # change to other form of new
+    {
+        no warnings 'redefine';
+        *{$class."::new"} = \&new_with_base;
+    }
+    
+}
 
 #--------------------------------------------------------------------------#
 # caller
@@ -93,23 +122,70 @@ sub give_methods {
 
 sub new {
     no strict 'refs';
-    my $class = shift;
-    $class = ref($class) if ref($class);
-    my @args = defined *{$class."::PREBUILD"}{CODE} ? 
-        &{$class."::PREBUILD"}(@_) : @_;
+    my ($class, @args) = @_;
+    die "new can't be called on an object" if ref($class);
 
-    # leftmost superclass creates object if it can
-    my $self;
-    for (@{"${class}::ISA"}) {
-        $self = $_->new(@args), last if $_->can("new");
-    }
-    $self = \(my $scalar) unless $self;
+    # create blessed object
+    my $self = \do{ my $scalar };
+    bless $self, $class;
+
+    # call initializer
+    return BUILDALL( $class, $self, @args );
+}
+
+sub new_with_base {
+    no strict 'refs';
+    my ($class, @args) = @_;
+    die "new can't be called on an object" if ref($class);
+
+    # create blessed object
+    my $base_class = $base_class_of{ $class };
+    my $prebuild = *{$class."::PREBUILD"}{CODE};
+    my @filtered_args 
+        = defined $prebuild ? $prebuild->($base_class, @args) : @args;
+    my $self = $base_class->new( @filtered_args ); 
     bless $self, $class;
     my $addr = Object::LocalVars::_ident $self;
     ${$class . "::TRACKER"}{$addr} = $self;
     weaken ${$class . "::TRACKER"}{$addr}; # don't let this stop destruction
+
+    # call initializer -- but skip base_class
+    { 
+        local @{$class."::ISA"} 
+            = grep { $_ ne $base_class } @{$class."::ISA"};
+        return BUILDALL( $class, $self, @_ );
+    }
+}
+
+#--------------------------------------------------------------------------#
+# BUILDALL
+#--------------------------------------------------------------------------#
+
+sub BUILDALL {
+    no strict 'refs';
+    my ($class, $self, @args) = @_;
     
-    $self->BUILD(@_) if defined *{$class."::BUILD"}{CODE};
+    # return if we've already initialized this class
+    my $addr = Object::LocalVars::_ident $self;
+    return $self if ( exists ${$class . "::TRACKER"}{$addr} );
+
+    # otherwise register $self in the tracker and continue
+    ${$class . "::TRACKER"}{$addr} = $self;
+    weaken ${$class . "::TRACKER"}{$addr}; # don't let this stop destruction
+    
+    # initialize superclasses if they can
+    for my $superclass (@{"${class}::ISA"}) {
+        if ( my $super_buildall = $superclass->can( 'BUILDALL' ) ) {
+            my $prebuild = *{$class."::PREBUILD"}{CODE};
+            my @filtered_args = 
+                defined $prebuild ? $prebuild->($superclass, @args) : @args;
+            $super_buildall->($superclass, $self, @filtered_args);
+        }
+    }
+    
+    # initialize self if we have an initializer
+    *{$class."::BUILD"}{CODE}->($self, @args) 
+        if defined *{$class."::BUILD"}{CODE};
     return $self;
 }
 
@@ -141,20 +217,30 @@ sub CLONE {
 
 sub DESTROY {
     no strict 'refs';
-    my $self = shift;
-    my $class = ref $self or return;
-    $self->DEMOLISH if defined *{$class."::DEMOLISH"}{CODE};
+    my ($self, $class) = @_;
+    $class ||= ref $self;
+    
+    # return if we've already destructed this class
     my $addr = Object::LocalVars::_ident $self;
+    return if ( ! exists ${$class . "::TRACKER"}{$addr} );
+    
+    # otherwise mark that we're destroying this class and continue
+    delete ${$class . "::TRACKER"}{$addr};
+    
+    # demolish and free data for this class
+    *{$class."::DEMOLISH"}{CODE}->($self) 
+        if defined *{$class."::DEMOLISH"}{CODE};
     for ( keys %{"${class}::DATA::"} ) {
         delete (${"${class}::DATA::$_"}{$addr});
     }
-    delete ${$class . "::TRACKER"}{$addr};
-    for ( @{"${class}::ISA"} ) {
-        if ( $_->can("DESTROY") ) {
-            bless ($self, $_);
-            return;
+
+    # destroy all superclasses
+    for my $superclass ( @{"${class}::ISA"} ) {
+        if ( my $super_destroyer = $superclass->can("DESTROY") ) {
+            $super_destroyer->($self, $superclass);
         }
     }
+
 }
 
 #--------------------------------------------------------------------------#
@@ -201,6 +287,10 @@ sub MODIFY_SCALAR_ATTRIBUTES {
             _install_accessors( $OL_PACKAGE, $referent, "private", 0 );
             undef $attr;
         }
+        elsif ( $attr =~ /^(?:ReadOnly)$/ ) {
+            _install_accessors( $OL_PACKAGE, $referent, "readonly", 0 );
+            undef $attr;
+        }
         elsif ($attr =~ /^(?:Class|ClassPriv)$/ ) {
             _install_accessors( $OL_PACKAGE, $referent, "private", 1 );
             undef $attr;
@@ -212,6 +302,13 @@ sub MODIFY_SCALAR_ATTRIBUTES {
         elsif ($attr =~ /^(?:ClassPub)$/ ) {
             _install_accessors( $OL_PACKAGE, $referent, "public", 1 );
             undef $attr;
+        }
+        elsif ($attr =~ /^(?:ClassReadOnly)$/ ) {
+            _install_accessors( $OL_PACKAGE, $referent, "readonly", 1 );
+            undef $attr;
+        }
+        else {
+            # we don't really care
         }
     }
     return grep {defined} @attrs;    
@@ -348,13 +445,15 @@ sub _install_accessors {
 
     # install accessors
     return if $privacy eq "private"; # unless private 
+    my $accessor_privacy = $privacy eq 'readonly' ? 'public'    : $privacy;
+    my $mutator_privacy  = $privacy eq 'readonly' ? 'protected' : $privacy;
     my $evaltext = 
             "*${package}::${name} = sub { \n" .
-                _gen_privacy( $package, $name, $privacy ) .
+                _gen_privacy( $package, $name, $accessor_privacy ) .
                 _gen_accessor( $package, $name, $classwide ) .
             "\n}; \n\n" .
             "*${package}::set_${name} = sub { \n" .
-                _gen_privacy( $package, "set_$name", $privacy ) .
+                _gen_privacy( $package, "set_$name", $mutator_privacy ) .
                 _gen_mutator( $package, $name, $classwide ) .
             "\n}; "
     ; # my
@@ -376,11 +475,14 @@ sub _install_wrapper {
     my $name = *{$symbol}{NAME};
     *{$package."::METHODS::$name"} = $coderef;
     my $evaltext = "*${package}::${name} = sub {\n". 
-            "  my \$obj = shift;\n" .
             _gen_privacy( $package, $name, $privacy ) .
-            "  local \$${package}::self = \$obj;\n" .
-            _gen_class_locals($package) .
-            _gen_object_locals($package) .
+            ( ( $privacy ne 'private' ) 
+              ? "  my \$obj = shift;\n" .
+                "  local \$${package}::self = \$obj;\n" .
+                _gen_class_locals($package) .
+                _gen_object_locals($package)
+              : ''
+            ) .
             "  local \$Carp::CarpLevel = \$Carp::CarpLevel + 2;\n".
             "  ${package}::METHODS::${name}(\@_);\n".
         "}\n"
@@ -393,6 +495,7 @@ sub _install_wrapper {
 
 1; #this line is important and will help the module return a true value
 __END__
+
 #--------------------------------------------------------------------------#
 # main pod documentation 
 #--------------------------------------------------------------------------#
@@ -419,30 +522,30 @@ variables
 
 =head1 DESCRIPTION
 
-I<This is an early development release.  Documentation is incomplete and the
-API may change.  Do not use for production purposes.  Comments appreciated.>
+I<This is a development release.  The API may change slightly.  Do not use for
+production purposes.  Comments appreciated.>
 
 This module helps developers create "outside-in" objects.  Properties (and
-C<$self>) are declared as package globals.  Method calls are wrapped such that 
+C<$self>) are declared as package globals.  Method calls are wrapped such that
 these globals take on a local value that is correct for the specific calling
 object and the duration of the method call.  I.e. C<$self> is locally aliased
 to the calling object and properties are locally aliased to the values of the
-properties for that object.  The package globals themselves are empty and data
-are stored in a separate namespace for each package, keyed off the reference
-addresses of the objects.
+properties for that object.  The package globals themselves only declare
+properties in the package and hold no data themselves.  Data are stored in a
+separate namespace for each property, keyed off the reference memory addresses
+of the objects.
 
-"Outside-in" objects are similar to "inside-out" objects, which store data in a
-single lexical hash closure for each property that is keyed off the reference
-addresses of the objects.  Both differ from "traditional" Perl objects, which
-store data for the object directly within a blessed reference to a data
-structure.  For both "outside-in" and "inside-out" objects, data is stored
-centrally and the blessed reference is simply a key to look up the right data
-in the central data store.
+Outside-in objects are similar to "inside-out" objects, which store data in a
+single lexical hash (or closure) for each property, which is keyed off the
+reference memory addresses of the objects.  Both differ from classic Perl
+objects, which hold data for the object directly using a blessed reference or
+closure to a data structure, typically a hash.  For both outside-in and
+inside-out objects, data are stored centrally and the blessed reference is
+simply a key to look up the right data in the central data store.
 
-Unlike with "inside-out" objects, the use of package variables for 
-"outside-in" objects allows for the use of local symbol table manipulation.
-As a result, Object::LocalVars to deliver a variety of features -- though with
-some drawbacks.
+The use of package variables for outside-in objects allows for the use of
+dynamic symbol table manipulation and aliasing.  As a result, Object::LocalVars
+delivers a variety of features -- though with some corresponding drawbacks.
 
 =head2 Features
 
@@ -450,8 +553,8 @@ some drawbacks.
 
 =item * 
 
-Provides $self automatically to methods without 'C<my $self = shift>' and the
-like
+Provides C<$self> automatically to methods without 'C<my $self = shift>' and
+the like
 
 =item * 
 
@@ -461,38 +564,44 @@ accessors or mutators, eliminating the overhead of these calls in methods
 
 =item * 
 
-Array and hash properties may be accessed via direct dereference of a 
-simple variable, allowing developers to push, pop, splice, etc. without
+Array and hash properties may be accessed via direct dereference of  
+simple variables, allowing developers to push, pop, splice, etc. without
 the usual tortured syntax to dereference an accessor call
 
 =item *
 
 Properties no longer require accessors to have compile time syntax checking
-under C<use strict>
+under strictures (i.e. 'C<use strict>'); 'public' properties have accessors
+automatically provided as needed
 
 =item * 
 
 Uses attributes to mark properties and methods, but only in the BEGIN phase so
-should be mod_perl friendly (though I haven't tested this yet)
+should be mod_perl friendly (though this has not been tested yet)
 
 =item *
 
 Provides attributes for public, protected and private properties, class
-properties and methods
-
-=item *
-
-Does not use source filtering
+properties, and methods
 
 =item *
 
 Orthogonality -- can subclass just about any other class, regardless of
-implementation.  (Also a nice feature of some "inside-out" implementations)
+implementation. 
 
 =item *
 
-Minimally thread-safe under a recent release of Perl 5.8 -- objects are 
-cloned across thread boundaries (or a C<fork> on Win32)
+Multiple inheritance supported in initializers and destructors (though only one
+superclass can be of a special, orthogonal type)
+
+=item *
+
+Minimally thread-safe under Perl 5.8 or greater -- objects are safely cloned
+across thread boundaries (or a pseudo-fork on Win32)
+
+=item *
+
+Achieves these features without source filtering
 
 =back
 
@@ -502,54 +611,196 @@ cloned across thread boundaries (or a C<fork> on Win32)
 
 =item * 
 
-Method efficiency -- wrappers around methods create extra overhead on method
+Method inefficiency -- wrappers around methods create extra overhead on method
 calls
 
 =item *
 
-Minimal encapsulation -- data is hidden but still publically accessible, unlike
-approaches that use lexical closures to create strong encapsulation
+Accessor inefficiency -- privacy checks and extra indirection through package
+symbol tables create extra overhead (compared to direct hash dereferencing
+of classic Perl objects)
 
 =item *
 
-Designed for single inheritance only.  Multiple inheritance may or may not
-work depending on the exact circumstances
+Minimal encapsulation -- data are hidden but still publically accessible,
+unlike approaches that use lexicals or closures to create strong encapsulation;
+(will be addressed in a future release)
 
 =item *
 
-Does not support threads::shared -- objects existing before a new thread is
+Does not support L<threads::shared> -- objects existing before a new thread is
 created will persist into the new thread, but changes in an object cannot be
 reflected in the corresponding object in the other thread
 
 =back
 
+=head2 Design principles
+
+I<Simplicity>
+
+Object::LocalVars was written to simplify writing classes in Perl by
+removing the need for redundant and awkward code. E.g.:
+ 
+ sub foo {
+     my $self = shift;                 # e.g. repetitive
+     push @{$self->some_list}, "foo";  # e.g. awkward
+ }    
+
+Instead, Object::LocalVars uses  a more elegant, readable and minimalist
+approach:
+
+ our $some_list : Prop;
+
+ sub foo : Method {
+     push @$some_list, "foo";
+ }
+
+As with Perl, "easy things should be easy; difficult things should be possible"
+and there should be a smooth learning curve from one to the other.
+
+I<Accessors and mutators>
+
+A major objective of Object::LocalVars is a significant reduction in the need
+for accessors (and mutators).  In general, accessors break the OO encapsulation
+paradigm by revealing or allowing changes to internal object state.  However,
+accessors are common in Perl for two big reasons:
+
+=over
+
+=item *
+
+Accessors offer typo protection.  Compare:
+
+ $self->{created}; # correct
+ $self->{craeted}; # typo
+ $self->craeted(); # typo, but caught at compile time
+
+=item *
+
+Automatically generating accessors is easy
+
+=back
+     
+As a result, the proliferation of accessors opens up the class internals unless
+additional protections are added to the accessors to make them private.  
+
+With Object::LocalVars's aliasing, properties stay private by default and don't
+I<need> an accessor for typo safety.  If protected or public accessors are
+needed for subclasses or external code to check state, these can be requested
+as needed.
+
+=head2 Terminology
+
+Object-oriented programming suffers from a plethora of terms used to describe
+certain features and characteristics of classes and objects.  Perl further
+complicates this by using these or related terms for other features entirely
+(e.g. attributes).  (And Perl 6 swaps around these definitions again.)  Within
+this documentation, terms are used as follows:
+
+=over
+
+=item *
+
+I<class> -- represents a model of associated states and behaviors in terms of
+I<properties> and I<methods>; in Perl, a I<class> is represented by a
+C<package>
+
+=item *
+
+I<object> -- represents a specific instance of a I<class>;  in Perl, an
+I<object> is represented by a reference to a data structure blessed into a
+particular C<package> 
+
+=item *
+
+I<property> -- represents a particular state of a I<class> or I<object>;
+I<properties> which are common to all I<objects> of a I<class> are referred to
+as I<class properties>; I<properties> which can be unique to each I<object> of
+a I<class> are referred to as I<object properties>; in Object::LocalVars,
+I<properties> are represented by package variables marked with an appropriate
+I<attribute>
+
+=item *
+
+I<method> -- represents a behavior exhibited by a I<class>;
+I<methods> which do not depend on I<object properties> are referred to as
+I<class methods>; I<methods> which depends on I<object properties> are referred
+to as I<object methods>; in Object::LocalVars, I<methods> are represented by 
+subroutines marked with an appropriate I<attribute>
+
+=item *
+
+I<accessors> -- used generically to refer to both 'accessors' and 'mutators',
+I<methods> which respectively read and change I<properties>.
+
+=item *
+
+I<attribute> -- code that modifies variable and subroutine declarations; in
+Perl, I<attributes> are separated from variable or subroutine declarations with
+a colon (e.g. 'C<our $name : Prop>'); see perldoc for L<attributes> for more
+details
+
+=back
+
 =head1 USAGE
 
-=head2 Overview
+=head2 Getting Started
 
-(TODO: discuss general usage, from importing through various pieces that can
-be defined)
+The most minimal usage of Object::LocalVars consists of importing it with
+C<use> and calling the C<give_methods> routine:
+
+ use Object::Localvars;
+ give_methods our $self;  # Required
+
+This automatically imports attribute handlers to mark properties and methods
+and imports several necessary, supporting subroutines that provide basic class
+functionality such as object construction and destruction.  To support
+environments such as C<mod_perl>, which have no C<CHECK> or C<INIT> phases, all
+attributes take effect during the C<BEGIN> phase when the module is compiled
+and executed.  The C<give_methods> subroutine provides the run-time setup
+aspect of this and must always appear as shown.
 
 =head2 Declaring Object Properties
 
-(TODO: Define object properties)
+Properties are declared by specifying a package variable using the keyword
+C<our> and an appropriate attribute.  There are several attributes (and aliases
+for attributes) available which result in different degrees of privacy and
+different resulting rules for creating accessors.
 
-Properties are declared by specifying a package variable using C<our> and an
-appropriate attribute.  There are a variety of attributes (and aliases for
-attributes) available which result in different degrees of privacy and different
-rules for creating accessors and mutators.
+While properties are declared as an C<our> variable, they are stored elsewhere
+in a private package namespace.  When methods are called, a wrapper function
+temporarily I<aliases> these package variables using C<local> to their proper
+class or object property values.  This allows for seamless access to 
+properties, as if they were normal variables.  For example, dereferencing a
+list property:
 
-(TODO: Discuss aliasing)
+ our $favorites_list : Prop;  
+ 
+ sub add_favorite : Method {
+   my $new_item = shift;
+   push @$favorites_list, $new_item;
+ }
 
 Object::LocalVars provides the following attributes for object properties:
+
+=over
+
+=item *
+
+:Prop or :Priv
 
   our $prop1 : Prop;
   our $prop2 : Priv;
 
 Either of these attributes declare a private property.  Private properties are
-aliased within methods, but no accessors or mutators are created.  This is the
-recommended default unless specific alternate functionality is needed. (Of course,
-developers are free to write methods that act as accessors or mutators.)
+aliased within methods, but no accessors are created.  This is the
+recommended default unless specific alternate functionality is needed. Of
+course, developers are free to write methods that act as accessors,
+and provide additional behavior such as argument validation.
+
+=item *
+
+:Prot
 
   our $prop3 : Prot;
 
@@ -557,33 +808,52 @@ This attribute declares a protected property.  Protected properties are aliased
 within methods, and an accessor and mutator are created.  However, the accessor
 and mutator may only be called by the declaring package or a subclass of it.
 
+=item *
+
+:Pub
+
   our $prop4 : Pub;
 
 This attribute declares a public property.  Public properties are aliased
 within methods, and an accessor and mutator are created that may be called from
 anywhere.
 
+=item *
+
+:ReadOnly
+
   our $prop5 : ReadOnly;
 
-(Not yet implemented)  This attribute declares a public property.  Public
-properties are aliased within methods, and an accessor and mutator are created.
-The accessor may be called from anywhere, but the mutator may only be called
-from the declaring package or a subclass of it.
+This attribute declares a readonly property.  Readonly properties are aliased
+within methods, and an accessor and mutator are created.  The accessor is
+public, but the mutator is protected.
+
+=back
 
 =head2 Declaring Class Properties
 
 Class properties work like object properties, but the value of a class property
-is the same value all objects (or when used in a class method).
+is the same in all object or class methods.
 
 Object::LocalVars provides the following attributes for class properties:
+
+=over
+
+=item *
+
+:Class or :ClassPriv
 
   our $class1 : Class;
   our $class2 : ClassPriv;
 
 Either of these attributes declare a private class property.  Private class
-properties are aliased within methods, but no accessors or mutators are
+properties are aliased within methods, but no accessors are
 created.  This is the recommended default unless specific alternate
 functionality is needed.
+
+=item *
+
+:ClassProt
 
   our $class3 : ClassProt;
 
@@ -592,19 +862,27 @@ are aliased within methods, and an accessor and mutator are created.  However,
 the accessor and mutator may only be called by the declaring package or a
 subclass of it.
 
+=item *
+
+:ClassPub
+
   our $class4 : ClassPub;
 
 This attribute declares a public class property.  Public class properties are
 aliased within methods, and an accessor and mutator are created that may be
 called from anywhere.
 
-  our $class5 : ReadOnly;
+=item *
 
-(Not yet implemented)  This attribute declares a public class property.  Public
-class properties are aliased within methods, and an accessor and mutator are
-created.  The accessor may be called from anywhere, but the mutator may only be
-called from the declaring package or a subclass of it.
+:ClassReadOnly
 
+  our $class5 : ClassReadOnly;
+
+This attribute declares a readonly class property.  Readonly class properties
+are aliased within methods, and an accessor and mutator are created.  The
+accessor is public, but the mutator is protected.
+
+=back
 
 =head2 Declaring Methods
 
@@ -613,104 +891,226 @@ called from the declaring package or a subclass of it.
     # $self and all properties automatically aliased
   }
 
-(TODO: define methods)
-
-(TODO: discuss how $self and properties are made available within methods)
+As with properties, methods are indicated by the addition of an attribute to a
+subroutine declaration.  When these marked subroutines are called, a wrapper
+function ensures that C<$self> and all properties are aliased appropriately and
+passes only the remaining arguments to the marked subroutine.  Class properties
+are always aliased to the current values of the class properties.  If
+the method is called on an object, all object properties are aliased to
+the state of that object.  These aliases are true aliases, not copies.  Changes
+to the alias change the underlying properties.
 
 Object::LocalVars provides the following attributes for subroutines:
 
-  sub fcn1 : Method { }
-  sub fcn2 : Pub { }
+=over
+
+=item *
+
+:Method or :Pub
+
+ sub fcn1 : Method { }
+ sub fcn2 : Pub { }
 
 Either of these attributes declare a public method.  Public methods may be
 called from anywhere.  This is the recommended default unless specific
 alternate functionality is needed.
 
-  :Prot
+=item *
+
+:Prot
+
+ sub fcn3 : Prot { }
 
 This attribute declares a protected method.  Protected methods may be called
 only from the declaring package or a subclass of it.  
 
-  :Priv
+=item *
 
-This attribute declares a private method.  Private methods may only be
-called only from the declaring package.  Private methods should generally be
-called directly, not using method syntax -- the major purpose of this attribute
-is to provide a wrapper that prevents the subroutine from being called outside
-the declaring package.  See L</Hints and Tips>.
+:Priv
+
+ sub fcn4 : Priv { }
+
+This attribute declares a private method.  Private methods may only be called
+only from the declaring package.  B<Private methods must be called directly>,
+not using method syntax, as no aliasing of C<$self> or properties is done -- it
+is assumed that these have already been done for the public/protected method
+which is calling the private one.  The major purpose of this attribute is to
+provide a wrapper that prevents the subroutine from being called outside the
+declaring package.  See L</Hints and Tips> for more details.
+
+=back 
 
 =head2 Accessors and Mutators
 
-  our $foo : Pub;     # :Pub creates an accessor and mutator
-  $obj->foo;          # returns value of foo for $obj
-  $obj->set_foo($val) # sets foo to $val and returns $obj
+ # property declarations
+ 
+ our $name : Pub;   # :Pub creates an accessor and mutator
+ our $age  : Pub;
+ 
+ # elsewhere in code
+ 
+ $obj->set_name( 'Fred' )->set_age( 23 );
+ print $obj->name;
 
-(TODO: define and describe)
+Properties that are public or protected automatically have appropriate
+accessors and mutators generated.  By default, these use an Eiffel-style
+syntax, e.g.:  C<< $obj->x() >> and C<< $obj->set_x() >>.  (This may be
+customizable in a future release.) Mutatators return the calling object,
+allowing method chaining.
 
 =head2 Constructors and Destructors
 
-(TODO: define)
+Object::LocalVars automatically provides the standard constructor, C<new>, an
+initializer, C<BUILDALL>, and the standard destructor, C<DESTROY>.  Each calls
+a series of functions to manage initialization and destruction within the
+inheritance model.
 
-(TODO: discuss calling pattern and usage of BUILD, PREBUILD, DEMOLISH)
+When C<new> is called, a new blessed object is created.  By default, this
+object is an anonymous scalar.  (See L</CONFIGURATION OPTIONS> for 
+how to use another type of object as a base instead.)
+
+After the object is created, C<BUILDALL> is used to recursively initialize
+superclasses using their C<BUILDALL> methods.  A user-defined C<PREBUILD>
+routine can modify the arguments passed to superclasses.  The object is then
+initialized using a user-defined C<BUILD>.  (This approach resembles the Perl6
+object initialization model.)
+
+A detailed program flow follows:
+
+=over 
+
+=item *
+
+Within C<new>: The name of the calling class is shifted off the argument list
+
+=item * 
+
+Within C<new>: A reference to an anonymous scalar is blessed into the calling
+class
+
+=item *
+
+Within C<new>: C<BUILDALL> is called as an object method on the blessed
+reference with a copy of the arguments to C<new>
+
+=item *
+
+Within C<BUILDALL>: subroutine returns if initialization for the current
+class has already been done for this object
+
+=item *
+
+Within C<BUILDALL>: for each superclass listed in C<@ISA>, if the superclass
+can call C<BUILDALL>, then C<PREBUILD> (if it exists) is called with the
+name of the superclass and a copy of the remaining argument list to C<new>.
+The superclass C<BUILDALL> is then called as an object method using the new
+blessed reference and the results of the C<PREBUILD>.  If C<PREBUILD> does
+not exist, then any C<BUILDALL> is called with a copy of the arguments to
+C<new>.
+
+=item *
+
+Within C<BUILDALL>: if a C<BUILD> method exists, it is called as a method
+using a copy of the arguments to C<new>
+
+=back
+
+During object destruction, the process works in reverse.  In C<DESTROY>,
+user-defined cleanup for the object's class is handled with C<DEMOLISH> (if it
+exists).  Then, memory for object properties is freed.  Finally, C<DESTROY> is
+called for each superclass in C<@ISA> which can do C<DESTROY>.
+
+Both C<BUILDALL> and C<DESTROY> handle "diamond" inheritance patterns 
+appropriately.  Initialization and destruction will only be done once for
+each superclass for any given object.
 
 =head2 Hints and Tips
 
 I<Calling private methods on $self>
 
 Good style for private method calling in traditional Perl object-oriented
-programming is to call private methods directly, C<< foo($self,@args) >>, rather
-than with method lookup, C<< $self->foo(@args) >>.  With Object::LocalVars, a
-private method should be called as C<< foo(@args) >> as the local aliases for $self
-and the properties are already in place.
+programming is to call private methods directly, C<< foo($self,@args) >>,
+rather than with method lookup, C<< $self->foo(@args) >>.  This avoids 
+unintentionally calling a subclass method of the same name if a subclass
+happens to provide one.
+
+With Object::LocalVars, a private method should be called directly as
+C<foo(@args)> as the dynamic, local aliases for C<$self> and the properties are
+already in place.
+
+Private methods should still be attributed as such to avoid their being 
+called from outside the class, but no additional aliasing is done.
+
+ our $numeric : Prop;
+ 
+ sub combine : Method {
+   my @args = @_;
+   
+   # call private routine _sum with same $self
+   # and property aliases
+   return _combine(@args);
+ }
+ 
+ sub _combine : Private {
+   my @args = @_;
+   if ( $numeric ) {
+     my $sum = 0;
+     $sum += $_ for @args;
+     return $sum;
+   }
+   else {
+     return join( q{}, @args );
+   }
+ }
 
 I<Avoiding hidden internal data>
 
 For a package using Object::LocalVars, e.g. C<My::Package>, object properties
-are stored in C<My::Package::DATA>, class properties are stored in 
-C<My::Package::CLASSDATA>, and methods are stored in 
-C<My::Package::METHODS>. Do not access these areas directly or overwrite 
-them with other global data or unexpected results are guaranteed to occur.
+are stored in C<My::Package::DATA>, class properties are stored in
+C<My::Package::CLASSDATA>, methods are stored in C<My::Package::METHODS>, and
+objects are tracked for cloning in C<My::Package::TRACKER>. Do not access these
+areas directly or overwrite them with other global data or unexpected results
+are guaranteed to occur.
+
+(In a future release of this module, this storage approach should be replaced
+by fully-encapsulated anonymous symbol tables.)
 
 =head1 METHODS TO BE WRITTEN BY A DEVELOPER
 
 =head2 C<PREBUILD()>
 
-  # Example
-  sub PREBUILD {
-    my @args = @_;
-    # filter @args in some way
-    return @args;
-  }
+ sub PREBUILD {
+     my ($superclass, @args) = @_;
+     # filter @args in some way
+     return @args;
+ }
 
-This subroutine may be written to filter arguments given to C<new()> before
-passing them to a superclass C<new()>.  I<This must not be tagged with a
-C<:Method> attribute> or equivalent as it is called before any object is
-available.  The primary purpose of this subroutine is to strip out any
-arguments that would cause the superclass constructor to die and/or to add any
-default arguments that should always be passed to the superclass constructor.
+This subroutine may be written to filter arguments given to C<BUILDALL> before
+passing them to a superclass C<BUILDALL>.  I<This must not be tagged with a
+C<:Method> attribute> or equivalent as it is called before the object is fully
+initialized.  The primary purpose of this subroutine is to strip out any
+arguments that would cause the superclass initializer to die and/or to add any
+default arguments that should always be passed to the superclass.
 
 =head2 C<BUILD()>
 
-  # Example
-  # Assuming our $count : Class;
-  sub BUILD : Method {
-    my %init = @_;
-    $prop1 = $init{prop1};
-    $count++;
-  }
+ # Assuming our $counter : Class;
+ sub BUILD : Method {
+     my %init = ( %defaults, @_ );
+     $prop1 = $init{prop1};
+     $counter++;
+ }
 
-This method may be defined to initialize the object after it is created.  If
-available, it is called at the end of the constructor.  The C<@_> array
-contains the original array passed to C<new()> -- regardless of any filtering
-by C<PREBUILD()>.
+This method may be written to initialize the object after it is created.  If
+available, it is called at the end of C<BUILDALL>.  The C<@_> array contains
+the original array passed to C<BUILDALL>.
 
 =head2 C<DEMOLISH()>
 
-  # Example
-  # Assume our $count : Class;
-  sub DEMOLISH : Method {
-    $count--;
-  }
+  # Assume our $counter : Class;
+ sub DEMOLISH : Method {
+     $counter--;
+ }
 
 This method may be defined to provide some cleanup actions when the object goes
 out of scope and is destroyed.  If available, it is called at the start of
@@ -724,9 +1124,9 @@ after the call to "use Object::LocalVars".  E.g.:
 
   use Object::LocalVars qw( !new );
 
-This is generally not needed or recommended, but is available should
-developers need some very customized behavior in C<new()> or C<DESTROY()> 
-that can't be achieved with C<BUILD()> and C<DEMOLISH()>.
+This is generally not needed and is strongly discouraged, but is available
+should developers need some very customized behavior in C<new> or C<DESTROY>
+that can't be achieved with C<BUILD> and C<DEMOLISH>.
 
 =head2 C<give_methods()>
 
@@ -734,37 +1134,74 @@ that can't be achieved with C<BUILD()> and C<DEMOLISH()>.
 
 Installs wrappers around all subroutines tagged as methods.  This function
 (and the declaration of C<our $self>) I<must> be used in all classes built
-with Object::LocalVars.
+with Object::LocalVars.  It should only be called once for any class.
 
 =head2 C<new()>
 
-The constructor.  This is not used within Object::LocalVars directly but is exported
-automatically when Object::LocalVars is imported.  C<new()> calls C<PREBUILD> (if
-it exists), blesses a new object either from a superclass (if one exists) or
-from scratch, and calls C<BUILD> (if it exists).  Classes built with
-Object::LocalVars have this available by default and generally do not need their
-own constructor.
+ my $obj = Some::Class->new( @arguments );
 
-=head2 C<DESTROY()>
-
-A destructor.  This is not used within Object::LocalVars directly but is exported
-automatically when Object::LocalVars is imported.  C<DESTROY()> calls C<DEMOLISH()>
-(if it exists) and reblesses the object into the first package in @ISA that 
-can DESTROY (if any) so that destruction chaining will happen automatically.
+The constructor.  Classes built with Object::LocalVars have this available by
+default and do not need their own constructor.
 
 =head2 C<caller()>
 
-This subroutine is exported automatically and emulates the built-in C<caller()>
-with the exception that if the caller is Object::LocalVars (i.e. from the wrapper
-functions), it will continue to look up the caller stack until the first
+ my $caller = caller(0);
+
+This subroutine is exported automatically and emulates the built-in C<caller>
+with the exception that if the caller is Object::LocalVars (i.e. from a wrapper
+function), it will continue to look upward in the calling stack until the first
 non-Object::LocalVars package is found.
+
+=head2 C<BUILDALL()>
+
+The initializer.  It is initially called by C<new> and then recursively calls
+C<BUILDALL> for all superclasses.  Arguments for superclass initialization are
+filtered through C<PREBUILD>.  It should not be called by users.
+
+=head2 C<CLONE()>
+
+When threads are used, this subroutine is called by perl when a new thread is
+created to ensure objects are properly cloned to the new thread.  Users
+shouldn't call this function directly and it must not be overridden.  This
+method only works for Perl 5.8 or greater.
+
+=head2 C<DESTROY()>
+
+A destructor.  This is not used within Object::LocalVars directly but is
+exported automatically when Object::LocalVars is imported.  C<DESTROY> calls
+C<DEMOLISH> (if it exists), frees object property memory, and then calls
+C<DESTROY> for every superclass in C<@ISA>.  It should not be called by users.
+
+=head1 CONFIGURATION OPTIONS
+
+=head2 C<base_object()>
+
+ package My::Class; 
+ use Object::LocalVars; 
+ Object::LocalVars->base_object( 'Another::Class' ); 
+ give_methods our $self;
+
+This class method changes the basic blessed object type for the calling package
+from being an anonymous scalar to a fully-fledged object of the given type.
+This allows classes build with Object::LocalVars to subclass any type of class,
+regardless of its underlying implementation (e.g. a hash) -- though only a
+single class can be subclassed in such a manner.  C<PREBUILD> (if it exists) is
+called on the arguments to C<new> before generating the base object using its
+constructor.  The object is then re-blessed into the proper class.  Other
+initializers are run as normal based on @ISA, but the base class is not
+intialized again.
+
+If the given base class does not already exist in @ISA, it is imported with
+C<require> and pushed onto the @ISA stack, similar to the pragma L<base>.
 
 =head1 BENCHMARKING
 
-Forthcoming.  In short, Object::LocalVars is faster than traditional approaches
-if the ratio of property access within methods is high relative to number of
-method calls.  Slower than traditional approaches if there are many method
-calls that individually do little property access. 
+Forthcoming.  In short, Object::LocalVars can be faster than traditional
+approaches if the ratio of property access within methods is high relative to
+number of method calls.  It is slower than traditional approaches if there are
+many method calls that individually do little property access.  In general,
+Object::LocalVars trades off coding elegance and clarity for speed of
+execution.  
 
 =head1 SEE ALSO
 
@@ -789,14 +1226,14 @@ multiple-inheritance and operator overloading
 
 L<Lexical::Attributes> -- "uses a source filter to hide the details of the
 Inside-Out technique from the user"; API based on Perl6 syntax; provides 
-$self automatically to methods
+C<$self> automatically to methods
 
 =item *
 
 L<Spiffy> -- "combines the best parts of Exporter.pm, base.pm, mixin.pm and
 SUPER.pm into one magic foundation class"; "borrows ideas from other OO
 languages like Python, Ruby, Java and Perl 6"; optionally uses source filtering
-to provide $self automatically to methods
+to provide C<$self> automatically to methods
 
 =back
 

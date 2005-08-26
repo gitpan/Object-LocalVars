@@ -10,18 +10,24 @@ Test::More->builder->failure_output(*STDOUT)
 use t::Common;
 use Scalar::Util 'refaddr';
 
-my $class = "t::Object::HandRoll::Sub";
+my $class1 = "t::Object::HandRoll::Sub";
+my $class2 = "t::Object::HandRoll::Sub_ISA";
 
-plan tests => TC() + 11;
+plan tests => 2 * TC() + 12;
 
-my $o = test_constructor($class);
+my $o = test_constructor($class1);
+my $p = test_constructor($class2);
 
 SKIP: {
-    skip "because we don't have a $class object", 11  
+    skip "because we don't have a $class1 object", 12  
         unless $o;
+    skip "because we don't have a $class2 object", 12  
+        unless $p;
     is( $o->report_package, "t::Object::HandRoll", 
-        "inherits report_package() method OK");
-    ok( $o->set_name("Charlie"), "naming object 'Charlie'");
+        "first object inherits report_package() method OK");
+    is( $p->report_package, "t::Object::HandRoll", 
+        "second object inherits report_package() method OK");
+    ok( $o->set_name("Charlie"), "naming first object 'Charlie'");
     ok( $o->set_color("orange"), "... making him 'orange'");
     ok( $o->set_shape("square"), "... making him 'square'");
     is( $o->desc, "I'm Charlie, my color is orange and my shape is square", 

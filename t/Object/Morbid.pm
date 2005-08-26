@@ -23,23 +23,25 @@ sub do_croak_removed : Method {
     $self->do_croak;
 }
 
-sub BUILD {
+sub BUILD : Method {
+    my ($inherit_test_flag) = @_;
     # helps us trap inherited BUILD
-    my $caller = caller;
-    die "not building in the right package" unless ref(shift) eq __PACKAGE__;
+    return if ! $inherit_test_flag;
+    die "BUILD shouldn't be called via inheritance" 
+        if ref($self) ne __PACKAGE__ ;
 }
 
 sub PREBUILD {
-    # helps us trap inherited PREBUILD
-    die "not the right prebuild" if @_;
-    return ("foo"); # if subclass inherits, parent class will die when it
-                    # gets this input
+    my ($superclass, @args) = @_;
+    # helps us trap inherited PREBUILD -- this shouldn't be called at all
+    die "PREBUILD shouldn't be called with when no superclasses exist";
 }
 
+my $demolish_count = 0;
 sub DEMOLISH {
     # helps us trap inherited DEMOLISH
-    my $caller = caller;
-    die "not cleaning up in the right package" unless ref(shift) eq __PACKAGE__;
+    $demolish_count++;
+    die "DEMOLISH shouldn't be called via inheritance" if $demolish_count > 1;
 }
 
 1;

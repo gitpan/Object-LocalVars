@@ -1,5 +1,15 @@
 Revision history for Perl module Object::LocalVars
 
+0.14 Thu Aug 25 23:28:45 EDT 2005
+    - completely rewrote inheritance code to support multiple inheritance
+      using BUILDALL() method; diamond inheritance handled appropriately
+    - changed default object type to an anonymous scalar
+    - object_base() subroutine added to explicitly use another type of
+      object as the blessed reference
+    - added pod for CLONE (omitted from 0.13)
+    - readonly properties implemented
+    - significantly expanded overall documentation
+
 0.13 Thu Aug 18 07:00:16 EDT 2005
     - Added CLONE method and supporting structures for thread-creation safety
     - Need Scalar::Util again for weaken() for CLONE support

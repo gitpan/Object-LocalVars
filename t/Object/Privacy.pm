@@ -9,11 +9,13 @@ our $private_prop    : Priv;
 our $protected_prop  : Prot;
 our $public_prop     : Pub;
 our $default_prop    : Prop;
+our $readonly_prop   : ReadOnly;
 
-our $class_prop      : Class;
-our $class_private_prop  : ClassPriv;
-our $class_protected_prop  : ClassProt;
-our $class_public_prop  : ClassPub;
+our $class_prop             : Class;
+our $class_private_prop     : ClassPriv;
+our $class_protected_prop   : ClassProt;
+our $class_public_prop      : ClassPub;
+our $class_readonly_prop    : ClassReadOnly;
 
 sub default_meth     : Method { return __PACKAGE__; }
 sub public_meth      : Pub   { return __PACKAGE__; }

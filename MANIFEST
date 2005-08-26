@@ -4,6 +4,7 @@ examples/benchmarking/egClassMethodMaker.pl
 examples/benchmarking/egHandRoll.pl
 examples/benchmarking/egObjectLocalVars.pl
 examples/benchmarking/objectbench.pl
+examples/benchmarking/objectprofile.pl
 lib/Object/LocalVars.pm
 LICENSE
 Makefile.PL
@@ -26,15 +27,19 @@ t/12-PREBUILD.t
 t/13-DEMOLISH.t
 t/14-privacy.t
 t/15-no-helper-inheritance.t
+t/16-diamond.t
 t/66-threaded.t
 t/67-forking.t
 t/Common.pm
 t/Object/Complete.pm
+t/Object/Complete/Diamond.pm
+t/Object/Complete/Sib.pm
 t/Object/Complete/Sub.pm
 t/Object/CustomNew.pm
 t/Object/EmptySubclass.pm
 t/Object/HandRoll.pm
 t/Object/HandRoll/Sub.pm
+t/Object/HandRoll/Sub_ISA.pm
 t/Object/Methods.pm
 t/Object/Morbid.pm
 t/Object/Morbid/Sub.pm

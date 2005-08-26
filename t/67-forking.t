@@ -12,10 +12,8 @@ Test::More->builder->failure_output(*STDOUT)
 my $class = "t::Object::Complete";
 
 # Win32 fork is done with threads, so we need at least perl 5.8
-if ( $^O eq 'MSWin32' && $Config{useithreads} ) {
-    if( $] < 5.008 ) {
-        plan skip_all => "Win32 fork() support requires perl 5.8";
-    }
+if ( $^O eq 'MSWin32' && $Config{useithreads} &&  $] < 5.008 ) {
+    plan skip_all => "Win32 fork() support requires perl 5.8";
 }
 else {
     plan tests => 4;
