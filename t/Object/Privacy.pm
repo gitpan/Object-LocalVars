@@ -2,6 +2,7 @@ package t::Object::Privacy;
 use strict;
 use warnings;
 use Object::LocalVars;
+use Scalar::Util qw( refaddr );
 
 give_methods our $self;
 
@@ -21,6 +22,15 @@ sub default_meth     : Method { return __PACKAGE__; }
 sub public_meth      : Pub   { return __PACKAGE__; }
 sub protected_meth   : Prot  { return __PACKAGE__; }
 sub private_meth     : Priv  { return __PACKAGE__; }
+
+sub indirect_private : Method {
+    my $tgt = shift;
+    return private_refaddr( $tgt );
+}
+
+sub private_refaddr : Priv {
+    return refaddr $self;
+}
 
 sub private_meth_lives : Method { return $self->private_meth };
 

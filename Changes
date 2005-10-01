@@ -1,5 +1,13 @@
 Revision history for Perl module Object::LocalVars
 
+0.15 Sat Oct  1 12:28:02 EDT 2005
+    - private methods now properly wrap attributes when called to ensure that
+      private methods can be called on objects other than $self
+    - switched to using Scalar::Util refaddr to get memory address and removed
+      internal _ident that used "0 + $ref"; this supports objects that overload
+      numerification
+    - added pod and pod coverage tests
+
 0.14 Thu Aug 25 23:28:45 EDT 2005
     - completely rewrote inheritance code to support multiple inheritance
       using BUILDALL() method; diamond inheritance handled appropriately

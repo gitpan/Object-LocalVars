@@ -3,7 +3,7 @@ use 5.006;
 use strict;
 use warnings;
 
-our $VERSION = "0.14";
+our $VERSION = "0.15";
 
 #--------------------------------------------------------------------------#
 # Required modules
@@ -11,7 +11,7 @@ our $VERSION = "0.14";
 
 use Config;
 use Carp;
-use Scalar::Util qw( weaken );
+use Scalar::Util qw( weaken refaddr );
 
 #--------------------------------------------------------------------------#
 # Exporting -- wrap import so we can check for necessary warnings
@@ -77,7 +77,7 @@ sub base_object {
     # change to other form of new
     {
         no warnings 'redefine';
-        *{$class."::new"} = \&new_with_base;
+        *{$class."::new"} = \&_new_with_base;
     }
     
 }
@@ -133,7 +133,7 @@ sub new {
     return BUILDALL( $class, $self, @args );
 }
 
-sub new_with_base {
+sub _new_with_base {
     no strict 'refs';
     my ($class, @args) = @_;
     die "new can't be called on an object" if ref($class);
@@ -145,7 +145,7 @@ sub new_with_base {
         = defined $prebuild ? $prebuild->($base_class, @args) : @args;
     my $self = $base_class->new( @filtered_args ); 
     bless $self, $class;
-    my $addr = Object::LocalVars::_ident $self;
+    my $addr = refaddr $self;
     ${$class . "::TRACKER"}{$addr} = $self;
     weaken ${$class . "::TRACKER"}{$addr}; # don't let this stop destruction
 
@@ -166,7 +166,7 @@ sub BUILDALL {
     my ($class, $self, @args) = @_;
     
     # return if we've already initialized this class
-    my $addr = Object::LocalVars::_ident $self;
+    my $addr = refaddr $self;
     return $self if ( exists ${$class . "::TRACKER"}{$addr} );
 
     # otherwise register $self in the tracker and continue
@@ -197,7 +197,7 @@ sub CLONE {
     no strict 'refs';
     my $class = shift;
     for my $old_obj_id ( keys %{$class . "::TRACKER"} ) {
-        my $new_obj_id = Object::LocalVars::_ident(
+        my $new_obj_id = refaddr(
             ${$class . "::TRACKER"}{$old_obj_id}
         );
         for my $prop ( keys %{"${class}::DATA::"} ) {
@@ -221,7 +221,7 @@ sub DESTROY {
     $class ||= ref $self;
     
     # return if we've already destructed this class
-    my $addr = Object::LocalVars::_ident $self;
+    my $addr = refaddr $self;
     return if ( ! exists ${$class . "::TRACKER"}{$addr} );
     
     # otherwise mark that we're destroying this class and continue
@@ -340,7 +340,7 @@ sub _gen_accessor {
     return $classwide 
         ? "return \$${package}::CLASSDATA{${name}}"
         : "return \$${package}::DATA::${name}" .
-          "{Object::LocalVars::_ident( \$_[0] )}" ;
+          "{refaddr( \$_[0] )}" ;
 }
 
 #--------------------------------------------------------------------------#
@@ -370,7 +370,7 @@ sub _gen_mutator {
         ? "\$${package}::CLASSDATA{${name}} = \$_[1];\n" .
           "return \$_[0] "
         : "\$${package}::DATA::${name}" .
-          "{Object::LocalVars::_ident( \$_[0] )} = \$_[1];\n" .
+          "{refaddr( \$_[0] )} = \$_[1];\n" .
           "return \$_[0]";
 }
 
@@ -384,7 +384,7 @@ sub _gen_object_locals {
     my @props = keys %{$package."::DATA::"};
     return "" unless @props;
     my $evaltext = "  my \$id;\n"; # need to define it
-    $evaltext .= "  \$id = Object::LocalVars::_ident(\$obj) if ref(\$obj);\n";
+    $evaltext .= "  \$id = refaddr(\$obj) if ref(\$obj);\n";
     my @globs = map { "*${package}::$_" } @props;
     my @refs = map { "\\\$${package}::DATA::$_ {\$id}" } @props;
     $evaltext .= "  local ( " .  join(", ", @globs) .  " ) = ( " .
@@ -413,14 +413,6 @@ sub _gen_privacy {
             "    unless \$caller eq '$package';\n"
         };
     }
-}
-
-#--------------------------------------------------------------------------#
-# _ident
-#--------------------------------------------------------------------------#
-
-sub _ident {
-    return 0 + $_[0];
 }
 
 #--------------------------------------------------------------------------#
@@ -476,13 +468,10 @@ sub _install_wrapper {
     *{$package."::METHODS::$name"} = $coderef;
     my $evaltext = "*${package}::${name} = sub {\n". 
             _gen_privacy( $package, $name, $privacy ) .
-            ( ( $privacy ne 'private' ) 
-              ? "  my \$obj = shift;\n" .
-                "  local \$${package}::self = \$obj;\n" .
-                _gen_class_locals($package) .
-                _gen_object_locals($package)
-              : ''
-            ) .
+            "  my \$obj = shift;\n" .
+            "  local \$${package}::self = \$obj;\n" .
+            _gen_class_locals($package) .
+            _gen_object_locals($package) .
             "  local \$Carp::CarpLevel = \$Carp::CarpLevel + 2;\n".
             "  ${package}::METHODS::${name}(\@_);\n".
         "}\n"
@@ -650,7 +639,7 @@ Instead, Object::LocalVars uses  a more elegant, readable and minimalist
 approach:
 
  our $some_list : Prop;
-
+ 
  sub foo : Method {
      push @$some_list, "foo";
  }
@@ -680,7 +669,7 @@ Accessors offer typo protection.  Compare:
 Automatically generating accessors is easy
 
 =back
-     
+
 As a result, the proliferation of accessors opens up the class internals unless
 additional protections are added to the accessors to make them private.  
 
@@ -931,12 +920,8 @@ only from the declaring package or a subclass of it.
  sub fcn4 : Priv { }
 
 This attribute declares a private method.  Private methods may only be called
-only from the declaring package.  B<Private methods must be called directly>,
-not using method syntax, as no aliasing of C<$self> or properties is done -- it
-is assumed that these have already been done for the public/protected method
-which is calling the private one.  The major purpose of this attribute is to
-provide a wrapper that prevents the subroutine from being called outside the
-declaring package.  See L</Hints and Tips> for more details.
+only from the declaring package.  See L</Hints and Tips> for good style for
+calling private methods.
 
 =back 
 
@@ -1026,42 +1011,13 @@ each superclass for any given object.
 
 =head2 Hints and Tips
 
-I<Calling private methods on $self>
+I<Calling private methods>
 
 Good style for private method calling in traditional Perl object-oriented
 programming is to call private methods directly, C<< foo($self,@args) >>,
 rather than with method lookup, C<< $self->foo(@args) >>.  This avoids 
 unintentionally calling a subclass method of the same name if a subclass
 happens to provide one.
-
-With Object::LocalVars, a private method should be called directly as
-C<foo(@args)> as the dynamic, local aliases for C<$self> and the properties are
-already in place.
-
-Private methods should still be attributed as such to avoid their being 
-called from outside the class, but no additional aliasing is done.
-
- our $numeric : Prop;
- 
- sub combine : Method {
-   my @args = @_;
-   
-   # call private routine _sum with same $self
-   # and property aliases
-   return _combine(@args);
- }
- 
- sub _combine : Private {
-   my @args = @_;
-   if ( $numeric ) {
-     my $sum = 0;
-     $sum += $_ for @args;
-     return $sum;
-   }
-   else {
-     return join( q{}, @args );
-   }
- }
 
 I<Avoiding hidden internal data>
 
@@ -1249,7 +1205,7 @@ The following commands will build, test, and install this module:
 =head1 BUGS
 
 Please report bugs using the CPAN Request Tracker at 
-http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-LocalVars
+L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-LocalVars>
 
 =head1 AUTHOR
 

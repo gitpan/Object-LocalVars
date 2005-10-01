@@ -16,6 +16,6 @@ Module::Build->new(
     build_requires      => { 
     },
     meta_add            => { 
-        noindex             => { directory => [ qw/examples/ ] } 
+        no_index            => { dir => [ qw/examples/ ] } 
     },
 )->create_build_script;

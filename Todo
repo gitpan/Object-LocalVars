@@ -12,25 +12,24 @@ TODO list for Perl module Object::LocalVars
 # Features for release soon
 #--------------------------------------------------------------------------#
 
-#--------------------------------------------------------------------------#
-# Potential incremental improvements for future releases
-#--------------------------------------------------------------------------#
-
 - add introspection method to retrieve list of properties for a class
 
-- update benchmarks
+- EXPORT_OK a default BUILD that automatically populates from a hash_ref
 
 - have property definitions take default value as argument e.g: :Prop( 12 ) or
   :Prop( [] ), etc.  *Don't* use package variable -- tempting, but vulnerable.
 
-- add configuration class method to switch get_ and set_ prefixes
-
 - user selectable accessor style (get_prop, set_prop) probably via an
   Object::LocalVars->prefix( get => 'get_', set => 'set_' );
 
-- EXPORT_OK a default BUILD that automatically populates from a hash_ref
+#--------------------------------------------------------------------------#
+# Potential incremental improvements for future releases
+#--------------------------------------------------------------------------#
 
-- synonyms for :Prop (:Property :P) and :Method (:Meth :M) etc
+- update benchmarks
+
+- synonyms for :Prop (:Property :P) and :Method (:Meth :M) etc (:Public,
+  :Private, :Protected)
 
 - @array and %hash with :Prop, etc. attributes
 
@@ -47,17 +46,11 @@ TODO list for Perl module Object::LocalVars
 #--------------------------------------------------------------------------#
 
 - switch from package globals for storing data to closures containing anonymous
-  globrefs
+  globrefs and coderefs (also need to move TRACKER to lexical closure in Object
+  LocalVars)
 
 - make attributes compatible with Attribute::Handlers -- should be OK as long
   as they only take effect in the BEGIN phase
-
-- private subs -- have to be careful how these are used.  Don't really need to
-  have Method marker because wrapper should be in place when called from some
-  public interface, but this is somewhat inconsistent.  Should they have a
-  wrapper that just checks that they are called privately and doesn't alias?
-  Or check if the first argument is an object?  DWIM or danger here?  May also
-  be relevant for traits and compositing.  
 
 - thread shared objects -- use Data::Uniqid or Data::UUID or equivalent to
   generate ID and store in a registry table (See below for ideas)  (VERY LOW

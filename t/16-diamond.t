@@ -6,6 +6,7 @@ use blib;
 use Test::More;
 use t::Common;
 use Object::LocalVars qw();
+use Scalar::Util qw( refaddr );
 use Data::Dumper qw(Dumper);
 
 # work around win32 console buffering
@@ -42,7 +43,7 @@ SKIP: {
         or diag "Got:\n" . Dumper($class->report_counts);
 
     # Check proper destruction
-    my $addr = Object::LocalVars::_ident( $o );
+    my $addr = refaddr( $o );
     $o = undef;
     ok( ! defined $o, "releasing object reference" );
     is_deeply($class->report_counts, $expected_after_destroy, 

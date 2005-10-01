@@ -5,12 +5,14 @@ use blib;
 
 use Test::More;
 use Test::Exception;
+use Scalar::Util qw( refaddr );
+
 use t::Common;
 # work around win32 console buffering
 Test::More->builder->failure_output(*STDOUT) 
     if ($^O eq 'MSWin32' && $ENV{HARNESS_VERBOSE});
 
-plan tests => 2 * TC() + 31;
+plan tests => 2 * TC() + 32;
 
 my $class = "t::Object::Privacy";
 my $subclass = "t::Object::Privacy::Sub";
@@ -77,6 +79,9 @@ SKIP: {
         "... and private property aliases manipulations working");
     lives_ok { $o->private_meth_lives } 
         "call private method from class lives";
+    is( $o->indirect_private( $p ), refaddr $p,
+        "private method wraps \$self properly" 
+    );
 
     # readonly
     dies_ok { $o->set_readonly_prop( 1 ) } 

@@ -114,7 +114,7 @@ DESCRIPTION
     approach:
 
      our $some_list : Prop;
-
+ 
      sub foo : Method {
          push @$some_list, "foo";
      }
@@ -349,13 +349,8 @@ USAGE
          sub fcn4 : Priv { }
 
         This attribute declares a private method. Private methods may only
-        be called only from the declaring package. Private methods must be
-        called directly, not using method syntax, as no aliasing of `$self'
-        or properties is done -- it is assumed that these have already been
-        done for the public/protected method which is calling the private
-        one. The major purpose of this attribute is to provide a wrapper
-        that prevents the subroutine from being called outside the declaring
-        package. See Hints and Tips for more details.
+        be called only from the declaring package. See Hints and Tips for
+        good style for calling private methods.
 
   Accessors and Mutators
 
@@ -429,42 +424,13 @@ USAGE
 
   Hints and Tips
 
-    *Calling private methods on $self*
+    *Calling private methods*
 
     Good style for private method calling in traditional Perl
     object-oriented programming is to call private methods directly,
     `foo($self,@args)', rather than with method lookup, `$self->foo(@args)'.
     This avoids unintentionally calling a subclass method of the same name
     if a subclass happens to provide one.
-
-    With Object::LocalVars, a private method should be called directly as
-    `foo(@args)' as the dynamic, local aliases for `$self' and the
-    properties are already in place.
-
-    Private methods should still be attributed as such to avoid their being
-    called from outside the class, but no additional aliasing is done.
-
-     our $numeric : Prop;
- 
-     sub combine : Method {
-       my @args = @_;
-   
-       # call private routine _sum with same $self
-       # and property aliases
-       return _combine(@args);
-     }
- 
-     sub _combine : Private {
-       my @args = @_;
-       if ( $numeric ) {
-         my $sum = 0;
-         $sum += $_ for @args;
-         return $sum;
-       }
-       else {
-         return join( q{}, @args );
-       }
-     }
 
     *Avoiding hidden internal data*
 

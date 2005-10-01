@@ -28,8 +28,11 @@ t/13-DEMOLISH.t
 t/14-privacy.t
 t/15-no-helper-inheritance.t
 t/16-diamond.t
+t/17-overloaded-object.t
 t/66-threaded.t
 t/67-forking.t
+t/98-test-pod-coverage.t
+t/99-test-pod.t
 t/Common.pm
 t/Object/Complete.pm
 t/Object/Complete/Diamond.pm
@@ -49,5 +52,6 @@ t/Object/Privacy.pm
 t/Object/Privacy/Sub.pm
 t/Object/PropAliases.pm
 t/Object/Props.pm
+t/Object/PropsOverload.pm
 t/Object/Trivial.pm
 Todo
