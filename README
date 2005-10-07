@@ -366,9 +366,11 @@ USAGE
 
     Properties that are public or protected automatically have appropriate
     accessors and mutators generated. By default, these use an Eiffel-style
-    syntax, e.g.: `$obj->x()' and `$obj->set_x()'. (This may be customizable
-    in a future release.) Mutatators return the calling object, allowing
-    method chaining.
+    syntax, e.g.: `$obj->x()' and `$obj->set_x()'. Mutatators return the
+    calling object, allowing method chaining.
+
+    The prefixes for accessors and mutators may be altered using the
+    `accessor_style()' class method.
 
   Constructors and Destructors
 
@@ -545,6 +547,45 @@ METHODS AUTOMATICALLY EXPORTED
     by users.
 
 CONFIGURATION OPTIONS
+  `accessor_style()'
+
+     package My::Class;
+     use Object::LocalVars;
+     BEGIN {
+         Object::LocalVars->accessor_style( {
+             get => 'get_',
+             set => 'set_'
+         });
+     }
+
+    This class method changes the prefixes for accessors and mutators. When
+    called from within a `BEGIN' block before properties are declared, it
+    will change the style of all properties subsequently declared. It takes
+    as an argument a hash reference with either or both of the keys 'get'
+    and 'set' with the values indicating the accessor/mutator prefix to be
+    used.
+
+    If the prefix is the same for both, an combined accessor/mutator will be
+    created that sets the value of the property if an argument is passed and
+    always returns the value of the property. E.g.:
+
+     package My::Class;
+     use Object::LocalVars;
+     BEGIN {
+         Object::LocalVars->accessor_style( {
+             get => q{},
+             set => q{}
+         });
+     }
+ 
+     our $age : Pub;
+ 
+     # elsewhere
+     $obj->age( $obj->age() + 1 );  # increment age by 1
+
+    Combined accessor/mutators are treated as mutators for the
+    interpretation of privacy settings.
+
   `base_object()'
 
      package My::Class; 

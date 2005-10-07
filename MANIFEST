@@ -29,6 +29,7 @@ t/14-privacy.t
 t/15-no-helper-inheritance.t
 t/16-diamond.t
 t/17-overloaded-object.t
+t/18-accessor-styles.t
 t/66-threaded.t
 t/67-forking.t
 t/98-test-pod-coverage.t
@@ -52,6 +53,10 @@ t/Object/Privacy.pm
 t/Object/Privacy/Sub.pm
 t/Object/PropAliases.pm
 t/Object/Props.pm
+t/Object/Props/AltStyleGet.pm
+t/Object/Props/AltStyleGetSet.pm
+t/Object/Props/AltStyleSame.pm
+t/Object/Props/AltStyleSet.pm
 t/Object/PropsOverload.pm
 t/Object/Trivial.pm
 Todo

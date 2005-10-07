@@ -31,33 +31,51 @@ sub TN { return 2 }
 sub test_new {
     my ($class, @args) = @_;
     my $o;
-    ok( $o = $class->new(@args), "create a $class");
-    isa_ok( $o, $class );
+    ok( $o = $class->new(@args), "... creating a $class object");
+    ok( $o->isa($class), "... confirming object is a $class" );
     return $o;
 }
 
 
-sub TA { return TN() + 6 }
+sub TA { return TN() + 7 }
 sub test_accessors {
-    my ($o, $prop) = @_;
+    my ($o, $prop, $prefix) = @_;
     my $class = ref($o);
-    my $pass = can_ok( $o, $_, "set_$_" );
+    $prefix ||= { get => q{}, set => 'set_' };
+    my $acc = $prefix->{get} . $prop;
+    my $mut = $prefix->{set} . $prop;
+    my $pass = ok( $o->can($acc), "... found accessor function '$acc'" );
+    $pass = ok( $o->can($mut), "... found mutator function '$mut'" ) && $pass;
+
     SKIP: {
-        skip load_fail_msg($class), TA() - 1  unless $pass;
+        skip load_fail_msg($class), TA() - 2  unless $pass;
         my $p = test_new($class);
         my $value1 = "foo";
         my $value2 = "bar";
-        my $set = "set_$prop";
-        is( $o->$set($value1), $o, 
-            "$set(\$value1) returns self for object 1" );
-        is( $o->$prop, $value1,
-            "$prop() equals \$value1 for object 1" );
-        is( $p->$set($value2), $p, 
-            "$set(\$value2) returns self for object 2" );
-        is( $p->$prop, $value2,
-            "$prop() equals \$value2 for object 2" );
-        is( $o->$prop, $value1,
-            "$prop() still equals \$value1 for object1" );
+        if ( $acc ne $mut ) {
+            is( $o->$mut($value1), $o, 
+                "... $mut(\$value1) returns self for object 1" );
+            is( $o->$acc, $value1,
+                "... $acc() equals \$value1 for object 1" );
+            is( $p->$mut($value2), $p, 
+                "... $mut(\$value2) returns self for object 2" );
+            is( $p->$acc, $value2,
+                "... $acc() equals \$value2 for object 2" );
+            is( $o->$acc, $value1,
+                "... $acc() still equals \$value1 for object1" );
+        }
+        else {
+            is( $o->$mut($value1), $value1, 
+                "... $mut(\$value1) returns \$value1 for object 1" );
+            is( $o->$acc, $value1,
+                "... $acc() equals \$value1 for object 1" );
+            is( $p->$mut($value2), $value2, 
+                "... $mut(\$value2) returns \$value2 for object 2" );
+            is( $p->$acc, $value2,
+                "... $acc() equals \$value2 for object 2" );
+            is( $o->$acc, $value1,
+                "... $acc() still equals \$value1 for object1" );
+        }
     }
     return $pass;
 }

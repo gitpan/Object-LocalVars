@@ -3,7 +3,7 @@ use 5.006;
 use strict;
 use warnings;
 
-our $VERSION = "0.15";
+our $VERSION = "0.16";
 
 #--------------------------------------------------------------------------#
 # Required modules
@@ -54,6 +54,20 @@ sub import {
 my (%public_methods, %protected_methods, %private_methods);
 
 my %base_class_of;
+
+my %prefixes_for;
+
+#--------------------------------------------------------------------------#
+# accessor_style
+#--------------------------------------------------------------------------#
+
+sub accessor_style {
+    my (undef, $prefix) = @_;
+    croak "Method accessor_style() requires a hash reference"
+        if not ref $prefix eq 'HASH';
+    my $class = caller(0);
+    $prefixes_for{ $class } = $prefix;
+}
 
 #--------------------------------------------------------------------------#
 # base_object
@@ -361,6 +375,23 @@ sub _gen_class_locals {
 }
 
 #--------------------------------------------------------------------------#
+# _gen_acc_mut
+#--------------------------------------------------------------------------#
+
+sub _gen_acc_mut {
+    my ($package, $name, $classwide) = @_;
+    return $classwide
+        ? "return (\@_ > 1) ? " .
+          "\$${package}::CLASSDATA{${name}} = \$_[1] : " .
+          "\$${package}::CLASSDATA{${name}} ; " .
+          "\n" 
+        : "return (\@_ > 1) ? " .
+          "\$${package}::DATA::${name}" . "{refaddr( \$_[0] )} = \$_[1] : " .
+          "\$${package}::DATA::${name}" . "{refaddr( \$_[0] )} " .
+          "\n";
+}
+
+#--------------------------------------------------------------------------#
 # _gen_mutator
 #--------------------------------------------------------------------------#
 
@@ -435,21 +466,38 @@ sub _install_accessors {
         %{$package."::DATA::".$name} = ();
     }
 
+    # determine names for accessor/mutator
+    my $get = $prefixes_for{ $package }{get};
+    my $set = $prefixes_for{ $package }{set};
+    my $acc = ( defined $get ? $get : q{}     ) . $name;
+    my $mut = ( defined $set ? $set : q{set_} ) . $name;
+
     # install accessors
     return if $privacy eq "private"; # unless private 
     my $accessor_privacy = $privacy eq 'readonly' ? 'public'    : $privacy;
     my $mutator_privacy  = $privacy eq 'readonly' ? 'protected' : $privacy;
-    my $evaltext = 
-            "*${package}::${name} = sub { \n" .
-                _gen_privacy( $package, $name, $accessor_privacy ) .
-                _gen_accessor( $package, $name, $classwide ) .
-            "\n}; \n\n" .
-            "*${package}::set_${name} = sub { \n" .
-                _gen_privacy( $package, "set_$name", $mutator_privacy ) .
-                _gen_mutator( $package, $name, $classwide ) .
-            "\n}; "
-    ; # my
-    # XXX print "\n\n$evaltext\n\n";
+    my $evaltext;
+    if ( $acc ne $mut ) {
+        $evaltext = 
+                "*${package}::${acc} = sub { \n" .
+                    _gen_privacy( $package, $name, $accessor_privacy ) .
+                    _gen_accessor( $package, $name, $classwide ) .
+                "\n}; \n\n" .
+                "*${package}::${mut} = sub { \n" .
+                    _gen_privacy( $package, "set_$name", $mutator_privacy ) .
+                    _gen_mutator( $package, $name, $classwide ) .
+                "\n}; "
+        ; # $evaltext
+    }
+    else {
+        $evaltext = 
+                "*${package}::${mut} = sub { \n" .
+                    _gen_privacy( $package, "set_$name", $mutator_privacy ) .
+                    _gen_acc_mut( $package, $name, $classwide ) .
+                "\n}; "
+        ; # $evaltext
+    }
+        
     eval $evaltext;
     die $@ if $@;
     return;
@@ -939,9 +987,11 @@ calling private methods.
 
 Properties that are public or protected automatically have appropriate
 accessors and mutators generated.  By default, these use an Eiffel-style
-syntax, e.g.:  C<< $obj->x() >> and C<< $obj->set_x() >>.  (This may be
-customizable in a future release.) Mutatators return the calling object,
-allowing method chaining.
+syntax, e.g.:  C<< $obj->x() >> and C<< $obj->set_x() >>.  Mutatators return
+the calling object, allowing method chaining.
+
+The prefixes for accessors and mutators may be altered using the
+C<accessor_style()> class method.
 
 =head2 Constructors and Destructors
 
@@ -1129,6 +1179,44 @@ C<DEMOLISH> (if it exists), frees object property memory, and then calls
 C<DESTROY> for every superclass in C<@ISA>.  It should not be called by users.
 
 =head1 CONFIGURATION OPTIONS
+
+=head2 C<accessor_style()>
+
+ package My::Class;
+ use Object::LocalVars;
+ BEGIN {
+     Object::LocalVars->accessor_style( {
+         get => 'get_',
+         set => 'set_'
+     });
+ }
+
+This class method changes the prefixes for accessors and mutators.  When
+called from within a C<BEGIN> block before properties are declared, it will
+change the style of all properties subsequently declared.  It takes as an
+argument a hash reference with either or both of the keys 'get' and 'set'
+with the values indicating the accessor/mutator prefix to be used.
+
+If the prefix is the same for both, an combined accessor/mutator will be
+created that sets the value of the property if an argument is passed and
+always returns the value of the property. E.g.:
+
+ package My::Class;
+ use Object::LocalVars;
+ BEGIN {
+     Object::LocalVars->accessor_style( {
+         get => q{},
+         set => q{}
+     });
+ }
+ 
+ our $age : Pub;
+ 
+ # elsewhere
+ $obj->age( $obj->age() + 1 );  # increment age by 1
+
+Combined accessor/mutators are treated as mutators for the interpretation of 
+privacy settings.
 
 =head2 C<base_object()>
 

@@ -19,9 +19,6 @@ TODO list for Perl module Object::LocalVars
 - have property definitions take default value as argument e.g: :Prop( 12 ) or
   :Prop( [] ), etc.  *Don't* use package variable -- tempting, but vulnerable.
 
-- user selectable accessor style (get_prop, set_prop) probably via an
-  Object::LocalVars->prefix( get => 'get_', set => 'set_' );
-
 #--------------------------------------------------------------------------#
 # Potential incremental improvements for future releases
 #--------------------------------------------------------------------------#

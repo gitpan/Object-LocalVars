@@ -1,5 +1,8 @@
 Revision history for Perl module Object::LocalVars
 
+0.16 Thu Oct  6 22:04:08 EDT 2005
+    - added accessor_style() method to customize accesssor/mutator prefixes
+
 0.15 Sat Oct  1 12:28:02 EDT 2005
     - private methods now properly wrap attributes when called to ensure that
       private methods can be called on objects other than $self
