@@ -1,7 +1,8 @@
 package t::Common;
 use strict;
 use warnings;
-use Exporter 'import';
+use Exporter ();
+our @ISA = 'Exporter';
 our @EXPORT = qw( 
     test_constructor TC
     test_accessors TA

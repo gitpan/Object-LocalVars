@@ -1,5 +1,10 @@
 Revision history for Perl module Object::LocalVars
 
+0.17 Thu Mar 12 00:46:21 EDT 2009
+    - documented that this module is experimental and unsupported and
+      should not be used for production purposes
+    - fixed some test errors; no functional changes
+
 0.16 Thu Oct  6 22:04:08 EDT 2005
     - added accessor_style() method to customize accesssor/mutator prefixes
 

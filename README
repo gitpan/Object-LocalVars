@@ -6,29 +6,32 @@ SYNOPSIS
       package My::Object;
       use strict;
       use Object::LocalVars;
- 
-      give_methods our $self;  # this exact line is required
- 
-      our $field1 : Prop;
+     
+  give_methods our $self;  # this exact line is required
+     
+  our $field1 : Prop;
       our $field2 : Prop;
- 
-      sub as_string : Method { 
+     
+  sub as_string : Method { 
         return "$self has properties '$field1' and '$field2'";
       }
 
 DESCRIPTION
-    *This is a development release. The API may change slightly. Do not use
-    for production purposes. Comments appreciated.*
+    Do not use for production purposes!
+
+    *This is a experimental module I developed when exploring inside-out
+    objects. It is no longer supported, but is left on CPAN as an example of
+    the kind of strange OO approaches that are possible with Perl.*
 
     This module helps developers create "outside-in" objects. Properties
-    (and `$self') are declared as package globals. Method calls are wrapped
+    (and $self) are declared as package globals. Method calls are wrapped
     such that these globals take on a local value that is correct for the
-    specific calling object and the duration of the method call. I.e.
-    `$self' is locally aliased to the calling object and properties are
-    locally aliased to the values of the properties for that object. The
-    package globals themselves only declare properties in the package and
-    hold no data themselves. Data are stored in a separate namespace for
-    each property, keyed off the reference memory addresses of the objects.
+    specific calling object and the duration of the method call. I.e. $self
+    is locally aliased to the calling object and properties are locally
+    aliased to the values of the properties for that object. The package
+    globals themselves only declare properties in the package and hold no
+    data themselves. Data are stored in a separate namespace for each
+    property, keyed off the reference memory addresses of the objects.
 
     Outside-in objects are similar to "inside-out" objects, which store data
     in a single lexical hash (or closure) for each property, which is keyed
@@ -45,9 +48,8 @@ DESCRIPTION
     corresponding drawbacks.
 
   Features
-
-    *   Provides `$self' automatically to methods without '`my $self =
-        shift'' and the like
+    *   Provides $self automatically to methods without '"my $self = shift"'
+        and the like
 
     *   Provides dynamic aliasing of properties within methods -- methods
         can access properties directly as variables without the overhead of
@@ -59,7 +61,7 @@ DESCRIPTION
         without the usual tortured syntax to dereference an accessor call
 
     *   Properties no longer require accessors to have compile time syntax
-        checking under strictures (i.e. '`use strict''); 'public' properties
+        checking under strictures (i.e. '"use strict"'); 'public' properties
         have accessors automatically provided as needed
 
     *   Uses attributes to mark properties and methods, but only in the
@@ -81,7 +83,6 @@ DESCRIPTION
     *   Achieves these features without source filtering
 
   Drawbacks
-
     *   Method inefficiency -- wrappers around methods create extra overhead
         on method calls
 
@@ -99,7 +100,6 @@ DESCRIPTION
         other thread
 
   Design principles
-
     *Simplicity*
 
     Object::LocalVars was written to simplify writing classes in Perl by
@@ -108,14 +108,14 @@ DESCRIPTION
      sub foo {
          my $self = shift;                 # e.g. repetitive
          push @{$self->some_list}, "foo";  # e.g. awkward
-     }    
+     }
 
     Instead, Object::LocalVars uses a more elegant, readable and minimalist
     approach:
 
      our $some_list : Prop;
- 
-     sub foo : Method {
+     
+ sub foo : Method {
          push @$some_list, "foo";
      }
 
@@ -148,7 +148,6 @@ DESCRIPTION
     these can be requested as needed.
 
   Terminology
-
     Object-oriented programming suffers from a plethora of terms used to
     describe certain features and characteristics of classes and objects.
     Perl further complicates this by using these or related terms for other
@@ -158,11 +157,11 @@ DESCRIPTION
 
     *   *class* -- represents a model of associated states and behaviors in
         terms of *properties* and *methods*; in Perl, a *class* is
-        represented by a `package'
+        represented by a "package"
 
     *   *object* -- represents a specific instance of a *class*; in Perl, an
         *object* is represented by a reference to a data structure blessed
-        into a particular `package'
+        into a particular "package"
 
     *   *property* -- represents a particular state of a *class* or
         *object*; *properties* which are common to all *objects* of a
@@ -184,14 +183,13 @@ DESCRIPTION
 
     *   *attribute* -- code that modifies variable and subroutine
         declarations; in Perl, *attributes* are separated from variable or
-        subroutine declarations with a colon (e.g. '`our $name : Prop'');
+        subroutine declarations with a colon (e.g. '"our $name : Prop"');
         see perldoc for attributes for more details
 
 USAGE
   Getting Started
-
     The most minimal usage of Object::LocalVars consists of importing it
-    with `use' and calling the `give_methods' routine:
+    with "use" and calling the "give_methods" routine:
 
      use Object::Localvars;
      give_methods our $self;  # Required
@@ -199,29 +197,28 @@ USAGE
     This automatically imports attribute handlers to mark properties and
     methods and imports several necessary, supporting subroutines that
     provide basic class functionality such as object construction and
-    destruction. To support environments such as `mod_perl', which have no
-    `CHECK' or `INIT' phases, all attributes take effect during the `BEGIN'
-    phase when the module is compiled and executed. The `give_methods'
+    destruction. To support environments such as "mod_perl", which have no
+    "CHECK" or "INIT" phases, all attributes take effect during the "BEGIN"
+    phase when the module is compiled and executed. The "give_methods"
     subroutine provides the run-time setup aspect of this and must always
     appear as shown.
 
   Declaring Object Properties
-
     Properties are declared by specifying a package variable using the
-    keyword `our' and an appropriate attribute. There are several attributes
+    keyword "our" and an appropriate attribute. There are several attributes
     (and aliases for attributes) available which result in different degrees
     of privacy and different resulting rules for creating accessors.
 
-    While properties are declared as an `our' variable, they are stored
+    While properties are declared as an "our" variable, they are stored
     elsewhere in a private package namespace. When methods are called, a
     wrapper function temporarily *aliases* these package variables using
-    `local' to their proper class or object property values. This allows for
+    "local" to their proper class or object property values. This allows for
     seamless access to properties, as if they were normal variables. For
     example, dereferencing a list property:
 
      our $favorites_list : Prop;  
- 
-     sub add_favorite : Method {
+     
+ sub add_favorite : Method {
        my $new_item = shift;
        push @$favorites_list, $new_item;
      }
@@ -267,7 +264,6 @@ USAGE
         accessor is public, but the mutator is protected.
 
   Declaring Class Properties
-
     Class properties work like object properties, but the value of a class
     property is the same in all object or class methods.
 
@@ -310,7 +306,6 @@ USAGE
         are created. The accessor is public, but the mutator is protected.
 
   Declaring Methods
-
       sub foo : Method {
         my ($arg1, $arg2) = @_;  # no need to shift $self
         # $self and all properties automatically aliased
@@ -318,7 +313,7 @@ USAGE
 
     As with properties, methods are indicated by the addition of an
     attribute to a subroutine declaration. When these marked subroutines are
-    called, a wrapper function ensures that `$self' and all properties are
+    called, a wrapper function ensures that $self and all properties are
     aliased appropriately and passes only the remaining arguments to the
     marked subroutine. Class properties are always aliased to the current
     values of the class properties. If the method is called on an object,
@@ -349,98 +344,94 @@ USAGE
          sub fcn4 : Priv { }
 
         This attribute declares a private method. Private methods may only
-        be called only from the declaring package. See Hints and Tips for
+        be called only from the declaring package. See "Hints and Tips" for
         good style for calling private methods.
 
   Accessors and Mutators
-
      # property declarations
- 
-     our $name : Pub;   # :Pub creates an accessor and mutator
+     
+ our $name : Pub;   # :Pub creates an accessor and mutator
      our $age  : Pub;
- 
-     # elsewhere in code
- 
-     $obj->set_name( 'Fred' )->set_age( 23 );
+     
+ # elsewhere in code
+     
+ $obj->set_name( 'Fred' )->set_age( 23 );
      print $obj->name;
 
     Properties that are public or protected automatically have appropriate
     accessors and mutators generated. By default, these use an Eiffel-style
-    syntax, e.g.: `$obj->x()' and `$obj->set_x()'. Mutatators return the
+    syntax, e.g.: "$obj->x()" and "$obj->set_x()". Mutatators return the
     calling object, allowing method chaining.
 
     The prefixes for accessors and mutators may be altered using the
-    `accessor_style()' class method.
+    "accessor_style()" class method.
 
   Constructors and Destructors
-
     Object::LocalVars automatically provides the standard constructor,
-    `new', an initializer, `BUILDALL', and the standard destructor,
-    `DESTROY'. Each calls a series of functions to manage initialization and
+    "new", an initializer, "BUILDALL", and the standard destructor,
+    "DESTROY". Each calls a series of functions to manage initialization and
     destruction within the inheritance model.
 
-    When `new' is called, a new blessed object is created. By default, this
-    object is an anonymous scalar. (See CONFIGURATION OPTIONS for how to use
-    another type of object as a base instead.)
+    When "new" is called, a new blessed object is created. By default, this
+    object is an anonymous scalar. (See "CONFIGURATION OPTIONS" for how to
+    use another type of object as a base instead.)
 
-    After the object is created, `BUILDALL' is used to recursively
-    initialize superclasses using their `BUILDALL' methods. A user-defined
-    `PREBUILD' routine can modify the arguments passed to superclasses. The
-    object is then initialized using a user-defined `BUILD'. (This approach
+    After the object is created, "BUILDALL" is used to recursively
+    initialize superclasses using their "BUILDALL" methods. A user-defined
+    "PREBUILD" routine can modify the arguments passed to superclasses. The
+    object is then initialized using a user-defined "BUILD". (This approach
     resembles the Perl6 object initialization model.)
 
     A detailed program flow follows:
 
-    *   Within `new': The name of the calling class is shifted off the
+    *   Within "new": The name of the calling class is shifted off the
         argument list
 
-    *   Within `new': A reference to an anonymous scalar is blessed into the
+    *   Within "new": A reference to an anonymous scalar is blessed into the
         calling class
 
-    *   Within `new': `BUILDALL' is called as an object method on the
-        blessed reference with a copy of the arguments to `new'
+    *   Within "new": "BUILDALL" is called as an object method on the
+        blessed reference with a copy of the arguments to "new"
 
-    *   Within `BUILDALL': subroutine returns if initialization for the
+    *   Within "BUILDALL": subroutine returns if initialization for the
         current class has already been done for this object
 
-    *   Within `BUILDALL': for each superclass listed in `@ISA', if the
-        superclass can call `BUILDALL', then `PREBUILD' (if it exists) is
+    *   Within "BUILDALL": for each superclass listed in @ISA, if the
+        superclass can call "BUILDALL", then "PREBUILD" (if it exists) is
         called with the name of the superclass and a copy of the remaining
-        argument list to `new'. The superclass `BUILDALL' is then called as
+        argument list to "new". The superclass "BUILDALL" is then called as
         an object method using the new blessed reference and the results of
-        the `PREBUILD'. If `PREBUILD' does not exist, then any `BUILDALL' is
-        called with a copy of the arguments to `new'.
+        the "PREBUILD". If "PREBUILD" does not exist, then any "BUILDALL" is
+        called with a copy of the arguments to "new".
 
-    *   Within `BUILDALL': if a `BUILD' method exists, it is called as a
-        method using a copy of the arguments to `new'
+    *   Within "BUILDALL": if a "BUILD" method exists, it is called as a
+        method using a copy of the arguments to "new"
 
-    During object destruction, the process works in reverse. In `DESTROY',
-    user-defined cleanup for the object's class is handled with `DEMOLISH'
+    During object destruction, the process works in reverse. In "DESTROY",
+    user-defined cleanup for the object's class is handled with "DEMOLISH"
     (if it exists). Then, memory for object properties is freed. Finally,
-    `DESTROY' is called for each superclass in `@ISA' which can do
-    `DESTROY'.
+    "DESTROY" is called for each superclass in @ISA which can do "DESTROY".
 
-    Both `BUILDALL' and `DESTROY' handle "diamond" inheritance patterns
+    Both "BUILDALL" and "DESTROY" handle "diamond" inheritance patterns
     appropriately. Initialization and destruction will only be done once for
     each superclass for any given object.
 
   Hints and Tips
-
     *Calling private methods*
 
     Good style for private method calling in traditional Perl
     object-oriented programming is to call private methods directly,
-    `foo($self,@args)', rather than with method lookup, `$self->foo(@args)'.
+    "foo($self,@args)", rather than with method lookup, "$self->foo(@args)".
     This avoids unintentionally calling a subclass method of the same name
     if a subclass happens to provide one.
 
     *Avoiding hidden internal data*
 
-    For a package using Object::LocalVars, e.g. `My::Package', object
-    properties are stored in `My::Package::DATA', class properties are
-    stored in `My::Package::CLASSDATA', methods are stored in
-    `My::Package::METHODS', and objects are tracked for cloning in
-    `My::Package::TRACKER'. Do not access these areas directly or overwrite
+    For a package using Object::LocalVars, e.g. "My::Package", object
+    properties are stored in "My::Package::DATA", class properties are
+    stored in "My::Package::CLASSDATA", methods are stored in
+    "My::Package::METHODS", and objects are tracked for cloning in
+    "My::Package::TRACKER". Do not access these areas directly or overwrite
     them with other global data or unexpected results are guaranteed to
     occur.
 
@@ -448,24 +439,22 @@ USAGE
     replaced by fully-encapsulated anonymous symbol tables.)
 
 METHODS TO BE WRITTEN BY A DEVELOPER
-  `PREBUILD()'
-
+  "PREBUILD()"
      sub PREBUILD {
          my ($superclass, @args) = @_;
          # filter @args in some way
          return @args;
      }
 
-    This subroutine may be written to filter arguments given to `BUILDALL'
-    before passing them to a superclass `BUILDALL'. *This must not be tagged
-    with a `:Method' attribute* or equivalent as it is called before the
+    This subroutine may be written to filter arguments given to "BUILDALL"
+    before passing them to a superclass "BUILDALL". *This must not be tagged
+    with a ":Method" attribute* or equivalent as it is called before the
     object is fully initialized. The primary purpose of this subroutine is
     to strip out any arguments that would cause the superclass initializer
     to die and/or to add any default arguments that should always be passed
     to the superclass.
 
-  `BUILD()'
-
+  "BUILD()"
      # Assuming our $counter : Class;
      sub BUILD : Method {
          my %init = ( %defaults, @_ );
@@ -474,11 +463,10 @@ METHODS TO BE WRITTEN BY A DEVELOPER
      }
 
     This method may be written to initialize the object after it is created.
-    If available, it is called at the end of `BUILDALL'. The `@_' array
-    contains the original array passed to `BUILDALL'.
+    If available, it is called at the end of "BUILDALL". The @_ array
+    contains the original array passed to "BUILDALL".
 
-  `DEMOLISH()'
-
+  "DEMOLISH()"
       # Assume our $counter : Class;
      sub DEMOLISH : Method {
          $counter--;
@@ -486,7 +474,7 @@ METHODS TO BE WRITTEN BY A DEVELOPER
 
     This method may be defined to provide some cleanup actions when the
     object goes out of scope and is destroyed. If available, it is called at
-    the start of the destructor (i.e `DESTROY').
+    the start of the destructor (i.e "DESTROY").
 
 METHODS AUTOMATICALLY EXPORTED
     These methods will be automatically exported for use. This export can be
@@ -496,59 +484,52 @@ METHODS AUTOMATICALLY EXPORTED
       use Object::LocalVars qw( !new );
 
     This is generally not needed and is strongly discouraged, but is
-    available should developers need some very customized behavior in `new'
-    or `DESTROY' that can't be achieved with `BUILD' and `DEMOLISH'.
+    available should developers need some very customized behavior in "new"
+    or "DESTROY" that can't be achieved with "BUILD" and "DEMOLISH".
 
-  `give_methods()'
-
+  "give_methods()"
       give_methods our $self;
 
     Installs wrappers around all subroutines tagged as methods. This
-    function (and the declaration of `our $self') *must* be used in all
+    function (and the declaration of "our $self") *must* be used in all
     classes built with Object::LocalVars. It should only be called once for
     any class.
 
-  `new()'
-
+  "new()"
      my $obj = Some::Class->new( @arguments );
 
     The constructor. Classes built with Object::LocalVars have this
     available by default and do not need their own constructor.
 
-  `caller()'
-
+  "caller()"
      my $caller = caller(0);
 
     This subroutine is exported automatically and emulates the built-in
-    `caller' with the exception that if the caller is Object::LocalVars
+    "caller" with the exception that if the caller is Object::LocalVars
     (i.e. from a wrapper function), it will continue to look upward in the
     calling stack until the first non-Object::LocalVars package is found.
 
-  `BUILDALL()'
-
-    The initializer. It is initially called by `new' and then recursively
-    calls `BUILDALL' for all superclasses. Arguments for superclass
-    initialization are filtered through `PREBUILD'. It should not be called
+  "BUILDALL()"
+    The initializer. It is initially called by "new" and then recursively
+    calls "BUILDALL" for all superclasses. Arguments for superclass
+    initialization are filtered through "PREBUILD". It should not be called
     by users.
 
-  `CLONE()'
-
+  "CLONE()"
     When threads are used, this subroutine is called by perl when a new
     thread is created to ensure objects are properly cloned to the new
     thread. Users shouldn't call this function directly and it must not be
     overridden. This method only works for Perl 5.8 or greater.
 
-  `DESTROY()'
-
+  "DESTROY()"
     A destructor. This is not used within Object::LocalVars directly but is
-    exported automatically when Object::LocalVars is imported. `DESTROY'
-    calls `DEMOLISH' (if it exists), frees object property memory, and then
-    calls `DESTROY' for every superclass in `@ISA'. It should not be called
-    by users.
+    exported automatically when Object::LocalVars is imported. "DESTROY"
+    calls "DEMOLISH" (if it exists), frees object property memory, and then
+    calls "DESTROY" for every superclass in @ISA. It should not be called by
+    users.
 
 CONFIGURATION OPTIONS
-  `accessor_style()'
-
+  "accessor_style()"
      package My::Class;
      use Object::LocalVars;
      BEGIN {
@@ -559,7 +540,7 @@ CONFIGURATION OPTIONS
      }
 
     This class method changes the prefixes for accessors and mutators. When
-    called from within a `BEGIN' block before properties are declared, it
+    called from within a "BEGIN" block before properties are declared, it
     will change the style of all properties subsequently declared. It takes
     as an argument a hash reference with either or both of the keys 'get'
     and 'set' with the values indicating the accessor/mutator prefix to be
@@ -577,17 +558,16 @@ CONFIGURATION OPTIONS
              set => q{}
          });
      }
- 
-     our $age : Pub;
- 
-     # elsewhere
+     
+ our $age : Pub;
+     
+ # elsewhere
      $obj->age( $obj->age() + 1 );  # increment age by 1
 
     Combined accessor/mutators are treated as mutators for the
     interpretation of privacy settings.
 
-  `base_object()'
-
+  "base_object()"
      package My::Class; 
      use Object::LocalVars; 
      Object::LocalVars->base_object( 'Another::Class' ); 
@@ -598,13 +578,13 @@ CONFIGURATION OPTIONS
     given type. This allows classes build with Object::LocalVars to subclass
     any type of class, regardless of its underlying implementation (e.g. a
     hash) -- though only a single class can be subclassed in such a manner.
-    `PREBUILD' (if it exists) is called on the arguments to `new' before
+    "PREBUILD" (if it exists) is called on the arguments to "new" before
     generating the base object using its constructor. The object is then
     re-blessed into the proper class. Other initializers are run as normal
     based on @ISA, but the base class is not intialized again.
 
     If the given base class does not already exist in @ISA, it is imported
-    with `require' and pushed onto the @ISA stack, similar to the pragma
+    with "require" and pushed onto the @ISA stack, similar to the pragma
     base.
 
 BENCHMARKING
@@ -629,12 +609,12 @@ SEE ALSO
 
     *   Lexical::Attributes -- "uses a source filter to hide the details of
         the Inside-Out technique from the user"; API based on Perl6 syntax;
-        provides `$self' automatically to methods
+        provides $self automatically to methods
 
     *   Spiffy -- "combines the best parts of Exporter.pm, base.pm, mixin.pm
         and SUPER.pm into one magic foundation class"; "borrows ideas from
         other OO languages like Python, Ruby, Java and Perl 6"; optionally
-        uses source filtering to provide `$self' automatically to methods
+        uses source filtering to provide $self automatically to methods
 
 INSTALLATION
     The following commands will build, test, and install this module:
@@ -646,8 +626,8 @@ INSTALLATION
 
 BUGS
     Please report bugs using the CPAN Request Tracker at
-    http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-Loc
-    alVars
+    <http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-Lo
+    calVars>
 
 AUTHOR
     David A Golden (DAGOLDEN)

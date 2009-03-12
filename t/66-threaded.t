@@ -2,7 +2,6 @@
 use strict;
 use warnings;
 use blib;  
-use threads;
 use Config;
 use Test::More;
 use t::Common;
@@ -17,12 +16,14 @@ if ( $Config{useithreads} ) {
         plan skip_all => "thread support requires perl 5.8";
     }
     else {
-        plan tests => 4;
+        plan tests => 5;
     }
 }
 else {
     plan skip_all => "perl ithreads not available";
 }
+
+require_ok('threads');
 
 my $o = test_constructor($class, name => "Charlie" );
 

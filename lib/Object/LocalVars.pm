@@ -3,7 +3,7 @@ use 5.006;
 use strict;
 use warnings;
 
-our $VERSION = "0.16";
+our $VERSION = '0.17';
 
 #--------------------------------------------------------------------------#
 # Required modules
@@ -17,7 +17,7 @@ use Scalar::Util qw( weaken refaddr );
 # Exporting -- wrap import so we can check for necessary warnings
 #--------------------------------------------------------------------------#
 
-use Exporter;
+use Exporter ();
 
 our @EXPORT = qw(   
     caller give_methods new BUILDALL CLONE DESTROY 
@@ -559,8 +559,11 @@ variables
 
 =head1 DESCRIPTION
 
-I<This is a development release.  The API may change slightly.  Do not use for
-production purposes.  Comments appreciated.>
+B<Do not use for production purposes!>
+
+I<This is a experimental module I developed when exploring inside-out objects.
+It is no longer supported, but is left on CPAN as an example of the kind of 
+strange OO approaches that are possible with Perl.>
 
 This module helps developers create "outside-in" objects.  Properties (and
 C<$self>) are declared as package globals.  Method calls are wrapped such that
