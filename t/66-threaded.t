@@ -16,7 +16,7 @@ if ( $Config{useithreads} ) {
         plan skip_all => "thread support requires perl 5.8";
     }
     else {
-        plan tests => 5;
+        plan tests => 4;
     }
 }
 else {
