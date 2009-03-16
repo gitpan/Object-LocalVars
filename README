@@ -77,8 +77,8 @@ DESCRIPTION
     *   Multiple inheritance supported in initializers and destructors
         (though only one superclass can be of a special, orthogonal type)
 
-    *   Minimally thread-safe under Perl 5.8 or greater -- objects are
-        safely cloned across thread boundaries (or a pseudo-fork on Win32)
+    *   Minimally thread-safe -- objects are safely cloned across thread
+        boundaries (or a pseudo-fork on Win32)
 
     *   Achieves these features without source filtering
 
@@ -519,7 +519,7 @@ METHODS AUTOMATICALLY EXPORTED
     When threads are used, this subroutine is called by perl when a new
     thread is created to ensure objects are properly cloned to the new
     thread. Users shouldn't call this function directly and it must not be
-    overridden. This method only works for Perl 5.8 or greater.
+    overridden.
 
   "DESTROY()"
     A destructor. This is not used within Object::LocalVars directly but is

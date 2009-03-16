@@ -1,4 +1,4 @@
-use 5.006;
+use 5.008;
 use Module::Build;
 # See perldoc Module::Build for details of how this works
 
@@ -9,7 +9,7 @@ Module::Build->new(
   create_readme       => 1,
   license             => 'perl',
   requires            => {
-    perl                => 5.006,
+    perl                => 5.008,
     'Carp'              => 0,
     'Exporter'          => 0,
     'Scalar::Util'      => 1.09,    # first appearance of refaddr()

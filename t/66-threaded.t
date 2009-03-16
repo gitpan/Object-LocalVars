@@ -3,6 +3,9 @@ use strict;
 use warnings;
 use blib;  
 use Config;
+# threads must come before Test::More to work, but ignore failure since
+# we skip anyway if its not loaded
+BEGIN { eval "use threads;" } 
 use Test::More;
 use t::Common;
 # work around win32 console buffering
@@ -11,19 +14,12 @@ Test::More->builder->failure_output(*STDOUT)
 
 my $class = "t::Object::Complete";
 
-if ( $Config{useithreads} ) {
-    if( $] < 5.008 ) {
-        plan skip_all => "thread support requires perl 5.8";
-    }
-    else {
-        plan tests => 4;
-    }
+if ( $INC{"threads.pm"} ) {
+  plan tests => 4;
 }
 else {
-    plan skip_all => "perl ithreads not available";
+  plan skip_all => "perl threads not available";
 }
-
-require_ok('threads');
 
 my $o = test_constructor($class, name => "Charlie" );
 

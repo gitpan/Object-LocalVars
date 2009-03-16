@@ -1,9 +1,9 @@
 package Object::LocalVars;
-use 5.006;
+use 5.008;
 use strict;
 use warnings;
 
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 
 #--------------------------------------------------------------------------#
 # Required modules
@@ -29,11 +29,6 @@ sub import {
     # check if threads are available
     if( $Config{useithreads} ) {
         my $caller = caller(0);
-        
-        # Perl < 5.8 doesn't use CLONE, which we need if threads are in use
-        if ( $] < 5.008 && $INC{'threads.pm'} ) {
-            carp "Warning: Object::LocalVars thread support requires perl 5.8";
-        }
         
         # Warn about sharing, but not for Test:: modules which always
         # share if any threads are enabled
@@ -636,8 +631,8 @@ superclass can be of a special, orthogonal type)
 
 =item *
 
-Minimally thread-safe under Perl 5.8 or greater -- objects are safely cloned
-across thread boundaries (or a pseudo-fork on Win32)
+Minimally thread-safe -- objects are safely cloned across thread boundaries (or
+a pseudo-fork on Win32)
 
 =item *
 
@@ -1171,8 +1166,7 @@ filtered through C<PREBUILD>.  It should not be called by users.
 
 When threads are used, this subroutine is called by perl when a new thread is
 created to ensure objects are properly cloned to the new thread.  Users
-shouldn't call this function directly and it must not be overridden.  This
-method only works for Perl 5.8 or greater.
+shouldn't call this function directly and it must not be overridden.  
 
 =head2 C<DESTROY()>
 
