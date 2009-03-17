@@ -14,7 +14,7 @@ Test::More->builder->failure_output(*STDOUT)
 
 my $class = "t::Object::Complete";
 
-if ( $INC{"threads.pm"} ) {
+if ( $Config{usethreads} ) {
   plan tests => 4;
 }
 else {

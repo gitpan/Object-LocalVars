@@ -1,6 +1,6 @@
 ---
 name: Object-LocalVars
-version: 0.19
+version: 0.20
 author:
   - 'David A Golden <dagolden@cpan.org>'
 abstract: |-
@@ -24,7 +24,7 @@ build_requires:
 provides:
   Object::LocalVars:
     file: lib/Object/LocalVars.pm
-    version: 0.19
+    version: 0.20
 generated_by: Module::Build version 0.32
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
