@@ -1,9 +1,10 @@
-package Object::LocalVars;
 use 5.008;
 use strict;
 use warnings;
 
-our $VERSION = '0.20';
+package Object::LocalVars;
+# ABSTRACT: Outside-in objects with local aliasing of $self and object variables
+our $VERSION = '0.21'; # VERSION
 
 #--------------------------------------------------------------------------#
 # Required modules
@@ -11,7 +12,7 @@ our $VERSION = '0.20';
 
 use Config;
 use Carp;
-use Scalar::Util qw( weaken refaddr );
+use Scalar::Util 1.09 qw( weaken refaddr );
 
 #--------------------------------------------------------------------------#
 # Exporting -- wrap import so we can check for necessary warnings
@@ -493,7 +494,7 @@ sub _install_accessors {
         ; # $evaltext
     }
         
-    eval $evaltext;
+    eval $evaltext; ## no critic
     die $@ if $@;
     return;
 }    
@@ -520,22 +521,26 @@ sub _install_wrapper {
         "}\n"
     ; # my
     # XXX print "\n\n$evaltext\n\n";
-    eval $evaltext;
+    eval $evaltext; ## no critic
     die $@ if $@;
     return;
 }
 
-1; #this line is important and will help the module return a true value
+1;
+
 __END__
 
-#--------------------------------------------------------------------------#
-# main pod documentation 
-#--------------------------------------------------------------------------#
+=pod
+
+=encoding UTF-8
 
 =head1 NAME
 
-Object::LocalVars - Outside-in objects with local aliasing of $self and object
-variables
+Object::LocalVars - Outside-in objects with local aliasing of $self and object variables
+
+=head1 VERSION
+
+version 0.21
 
 =head1 SYNOPSIS
 
@@ -556,7 +561,7 @@ variables
 
 B<Do not use for production purposes!>
 
-I<This is a experimental module I developed when exploring inside-out objects.
+I<This is an experimental module I developed when exploring inside-out objects.
 It is no longer supported, but is left on CPAN as an example of the kind of 
 strange OO approaches that are possible with Perl.>
 
@@ -657,7 +662,7 @@ of classic Perl objects)
 
 =item *
 
-Minimal encapsulation -- data are hidden but still publically accessible,
+Minimal encapsulation -- data are hidden but still publicly accessible,
 unlike approaches that use lexicals or closures to create strong encapsulation;
 (will be addressed in a future release)
 
@@ -675,7 +680,7 @@ I<Simplicity>
 
 Object::LocalVars was written to simplify writing classes in Perl by
 removing the need for redundant and awkward code. E.g.:
- 
+
  sub foo {
      my $self = shift;                 # e.g. repetitive
      push @{$self->some_list}, "foo";  # e.g. awkward
@@ -822,7 +827,7 @@ Object::LocalVars provides the following attributes for object properties:
 
 =item *
 
-:Prop or :Priv
+C<:Prop> or C<:Priv>
 
   our $prop1 : Prop;
   our $prop2 : Priv;
@@ -835,7 +840,7 @@ and provide additional behavior such as argument validation.
 
 =item *
 
-:Prot
+C<:Prot>
 
   our $prop3 : Prot;
 
@@ -845,7 +850,7 @@ and mutator may only be called by the declaring package or a subclass of it.
 
 =item *
 
-:Pub
+C<:Pub>
 
   our $prop4 : Pub;
 
@@ -855,11 +860,11 @@ anywhere.
 
 =item *
 
-:ReadOnly
+C<:ReadOnly>
 
   our $prop5 : ReadOnly;
 
-This attribute declares a readonly property.  Readonly properties are aliased
+This attribute declares a read-only property.  Read-only properties are aliased
 within methods, and an accessor and mutator are created.  The accessor is
 public, but the mutator is protected.
 
@@ -876,7 +881,7 @@ Object::LocalVars provides the following attributes for class properties:
 
 =item *
 
-:Class or :ClassPriv
+C<:Class> or C<:ClassPriv>
 
   our $class1 : Class;
   our $class2 : ClassPriv;
@@ -888,7 +893,7 @@ functionality is needed.
 
 =item *
 
-:ClassProt
+C<:ClassProt>
 
   our $class3 : ClassProt;
 
@@ -899,7 +904,7 @@ subclass of it.
 
 =item *
 
-:ClassPub
+C<:ClassPub>
 
   our $class4 : ClassPub;
 
@@ -909,11 +914,11 @@ called from anywhere.
 
 =item *
 
-:ClassReadOnly
+C<:ClassReadOnly>
 
   our $class5 : ClassReadOnly;
 
-This attribute declares a readonly class property.  Readonly class properties
+This attribute declares a read-only class property.  Read-only class properties
 are aliased within methods, and an accessor and mutator are created.  The
 accessor is public, but the mutator is protected.
 
@@ -941,7 +946,7 @@ Object::LocalVars provides the following attributes for subroutines:
 
 =item *
 
-:Method or :Pub
+C<:Method> or C<:Pub>
 
  sub fcn1 : Method { }
  sub fcn2 : Pub { }
@@ -952,7 +957,7 @@ alternate functionality is needed.
 
 =item *
 
-:Prot
+C<:Prot>
 
  sub fcn3 : Prot { }
 
@@ -961,7 +966,7 @@ only from the declaring package or a subclass of it.
 
 =item *
 
-:Priv
+C<:Priv>
 
  sub fcn4 : Priv { }
 
@@ -969,7 +974,7 @@ This attribute declares a private method.  Private methods may only be called
 only from the declaring package.  See L</Hints and Tips> for good style for
 calling private methods.
 
-=back 
+=back
 
 =head2 Accessors and Mutators
 
@@ -985,7 +990,7 @@ calling private methods.
 
 Properties that are public or protected automatically have appropriate
 accessors and mutators generated.  By default, these use an Eiffel-style
-syntax, e.g.:  C<< $obj->x() >> and C<< $obj->set_x() >>.  Mutatators return
+syntax, e.g.:  C<< $obj->x() >> and C<< $obj->set_x() >>.  Mutators return
 the calling object, allowing method chaining.
 
 The prefixes for accessors and mutators may be altered using the
@@ -1010,7 +1015,7 @@ object initialization model.)
 
 A detailed program flow follows:
 
-=over 
+=over
 
 =item *
 
@@ -1230,7 +1235,7 @@ single class can be subclassed in such a manner.  C<PREBUILD> (if it exists) is
 called on the arguments to C<new> before generating the base object using its
 constructor.  The object is then re-blessed into the proper class.  Other
 initializers are run as normal based on @ISA, but the base class is not
-intialized again.
+initialized again.
 
 If the given base class does not already exist in @ISA, it is imported with
 C<require> and pushed onto the @ISA stack, similar to the pragma L<base>.
@@ -1246,7 +1251,7 @@ execution.
 
 =head1 SEE ALSO
 
-These other modules provide similiar functionality and/or inspired this one. 
+These other modules provide similar functionality and/or inspired this one. 
 Quotes are from their respective documentations.
 
 =over
@@ -1278,36 +1283,35 @@ to provide C<$self> automatically to methods
 
 =back
 
-=head1 INSTALLATION
+=for :stopwords cpan testmatrix url annocpan anno bugtracker rt cpants kwalitee diff irc mailto metadata placeholders metacpan
 
-The following commands will build, test, and install this module:
+=head1 SUPPORT
 
- perl Build.PL
- perl Build
- perl Build test
- perl Build install
+=head2 Bugs / Feature Requests
 
-=head1 BUGS
+Please report any bugs or feature requests through the issue tracker
+at L<https://github.com/dagolden/Object-LocalVars/issues>.
+You will be notified automatically of any progress on your issue.
 
-Please report bugs using the CPAN Request Tracker at 
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-LocalVars>
+=head2 Source Code
+
+This is open source software.  The code repository is available for
+public review and contribution under the terms of the license.
+
+L<https://github.com/dagolden/Object-LocalVars>
+
+  git clone https://github.com/dagolden/Object-LocalVars.git
 
 =head1 AUTHOR
 
-David A Golden (DAGOLDEN)
+David Golden <dagolden@cpan.org>
 
-dagolden@cpan.org
+=head1 COPYRIGHT AND LICENSE
 
-http://dagolden.com/
+This software is Copyright (c) 2014 by David Golden.
 
-=head1 COPYRIGHT
+This is free software, licensed under:
 
-Copyright (c) 2005 by David A Golden
-
-This program is free software; you can redistribute
-it and/or modify it under the same terms as Perl itself.
-
-The full text of the license can be found in the
-LICENSE file included with this module.
+  The Apache License, Version 2.0, January 2004
 
 =cut

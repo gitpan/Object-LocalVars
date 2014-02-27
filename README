@@ -2,24 +2,27 @@ NAME
     Object::LocalVars - Outside-in objects with local aliasing of $self and
     object variables
 
+VERSION
+    version 0.21
+
 SYNOPSIS
       package My::Object;
       use strict;
       use Object::LocalVars;
-     
-  give_methods our $self;  # this exact line is required
-     
-  our $field1 : Prop;
+ 
+      give_methods our $self;  # this exact line is required
+ 
+      our $field1 : Prop;
       our $field2 : Prop;
-     
-  sub as_string : Method { 
+ 
+      sub as_string : Method { 
         return "$self has properties '$field1' and '$field2'";
       }
 
 DESCRIPTION
     Do not use for production purposes!
 
-    *This is a experimental module I developed when exploring inside-out
+    *This is an experimental module I developed when exploring inside-out
     objects. It is no longer supported, but is left on CPAN as an example of
     the kind of strange OO approaches that are possible with Perl.*
 
@@ -90,7 +93,7 @@ DESCRIPTION
         through package symbol tables create extra overhead (compared to
         direct hash dereferencing of classic Perl objects)
 
-    *   Minimal encapsulation -- data are hidden but still publically
+    *   Minimal encapsulation -- data are hidden but still publicly
         accessible, unlike approaches that use lexicals or closures to
         create strong encapsulation; (will be addressed in a future release)
 
@@ -114,8 +117,8 @@ DESCRIPTION
     approach:
 
      our $some_list : Prop;
-     
- sub foo : Method {
+ 
+     sub foo : Method {
          push @$some_list, "foo";
      }
 
@@ -217,8 +220,8 @@ USAGE
     example, dereferencing a list property:
 
      our $favorites_list : Prop;  
-     
- sub add_favorite : Method {
+ 
+     sub add_favorite : Method {
        my $new_item = shift;
        push @$favorites_list, $new_item;
      }
@@ -226,7 +229,7 @@ USAGE
     Object::LocalVars provides the following attributes for object
     properties:
 
-    *   :Prop or :Priv
+    *   ":Prop" or ":Priv"
 
           our $prop1 : Prop;
           our $prop2 : Priv;
@@ -238,7 +241,7 @@ USAGE
         methods that act as accessors, and provide additional behavior such
         as argument validation.
 
-    *   :Prot
+    *   ":Prot"
 
           our $prop3 : Prot;
 
@@ -247,7 +250,7 @@ USAGE
         However, the accessor and mutator may only be called by the
         declaring package or a subclass of it.
 
-    *   :Pub
+    *   ":Pub"
 
           our $prop4 : Pub;
 
@@ -255,13 +258,13 @@ USAGE
         aliased within methods, and an accessor and mutator are created that
         may be called from anywhere.
 
-    *   :ReadOnly
+    *   ":ReadOnly"
 
           our $prop5 : ReadOnly;
 
-        This attribute declares a readonly property. Readonly properties are
-        aliased within methods, and an accessor and mutator are created. The
-        accessor is public, but the mutator is protected.
+        This attribute declares a read-only property. Read-only properties
+        are aliased within methods, and an accessor and mutator are created.
+        The accessor is public, but the mutator is protected.
 
   Declaring Class Properties
     Class properties work like object properties, but the value of a class
@@ -270,7 +273,7 @@ USAGE
     Object::LocalVars provides the following attributes for class
     properties:
 
-    *   :Class or :ClassPriv
+    *   ":Class" or ":ClassPriv"
 
           our $class1 : Class;
           our $class2 : ClassPriv;
@@ -280,7 +283,7 @@ USAGE
         created. This is the recommended default unless specific alternate
         functionality is needed.
 
-    *   :ClassProt
+    *   ":ClassProt"
 
           our $class3 : ClassProt;
 
@@ -289,7 +292,7 @@ USAGE
         are created. However, the accessor and mutator may only be called by
         the declaring package or a subclass of it.
 
-    *   :ClassPub
+    *   ":ClassPub"
 
           our $class4 : ClassPub;
 
@@ -297,11 +300,11 @@ USAGE
         properties are aliased within methods, and an accessor and mutator
         are created that may be called from anywhere.
 
-    *   :ClassReadOnly
+    *   ":ClassReadOnly"
 
           our $class5 : ClassReadOnly;
 
-        This attribute declares a readonly class property. Readonly class
+        This attribute declares a read-only class property. Read-only class
         properties are aliased within methods, and an accessor and mutator
         are created. The accessor is public, but the mutator is protected.
 
@@ -323,7 +326,7 @@ USAGE
 
     Object::LocalVars provides the following attributes for subroutines:
 
-    *   :Method or :Pub
+    *   ":Method" or ":Pub"
 
          sub fcn1 : Method { }
          sub fcn2 : Pub { }
@@ -332,14 +335,14 @@ USAGE
         may be called from anywhere. This is the recommended default unless
         specific alternate functionality is needed.
 
-    *   :Prot
+    *   ":Prot"
 
          sub fcn3 : Prot { }
 
         This attribute declares a protected method. Protected methods may be
         called only from the declaring package or a subclass of it.
 
-    *   :Priv
+    *   ":Priv"
 
          sub fcn4 : Priv { }
 
@@ -349,18 +352,18 @@ USAGE
 
   Accessors and Mutators
      # property declarations
-     
- our $name : Pub;   # :Pub creates an accessor and mutator
+ 
+     our $name : Pub;   # :Pub creates an accessor and mutator
      our $age  : Pub;
-     
- # elsewhere in code
-     
- $obj->set_name( 'Fred' )->set_age( 23 );
+ 
+     # elsewhere in code
+ 
+     $obj->set_name( 'Fred' )->set_age( 23 );
      print $obj->name;
 
     Properties that are public or protected automatically have appropriate
     accessors and mutators generated. By default, these use an Eiffel-style
-    syntax, e.g.: "$obj->x()" and "$obj->set_x()". Mutatators return the
+    syntax, e.g.: "$obj->x()" and "$obj->set_x()". Mutators return the
     calling object, allowing method chaining.
 
     The prefixes for accessors and mutators may be altered using the
@@ -558,10 +561,10 @@ CONFIGURATION OPTIONS
              set => q{}
          });
      }
-     
- our $age : Pub;
-     
- # elsewhere
+ 
+     our $age : Pub;
+ 
+     # elsewhere
      $obj->age( $obj->age() + 1 );  # increment age by 1
 
     Combined accessor/mutators are treated as mutators for the
@@ -581,7 +584,7 @@ CONFIGURATION OPTIONS
     "PREBUILD" (if it exists) is called on the arguments to "new" before
     generating the base object using its constructor. The object is then
     re-blessed into the proper class. Other initializers are run as normal
-    based on @ISA, but the base class is not intialized again.
+    based on @ISA, but the base class is not initialized again.
 
     If the given base class does not already exist in @ISA, it is imported
     with "require" and pushed onto the @ISA stack, similar to the pragma
@@ -596,7 +599,7 @@ BENCHMARKING
     elegance and clarity for speed of execution.
 
 SEE ALSO
-    These other modules provide similiar functionality and/or inspired this
+    These other modules provide similar functionality and/or inspired this
     one. Quotes are from their respective documentations.
 
     *   Attribute::Property -- "easy lvalue accessors with validation"; uses
@@ -616,32 +619,27 @@ SEE ALSO
         other OO languages like Python, Ruby, Java and Perl 6"; optionally
         uses source filtering to provide $self automatically to methods
 
-INSTALLATION
-    The following commands will build, test, and install this module:
+SUPPORT
+  Bugs / Feature Requests
+    Please report any bugs or feature requests through the issue tracker at
+    <https://github.com/dagolden/Object-LocalVars/issues>. You will be
+    notified automatically of any progress on your issue.
 
-     perl Build.PL
-     perl Build
-     perl Build test
-     perl Build install
+  Source Code
+    This is open source software. The code repository is available for
+    public review and contribution under the terms of the license.
 
-BUGS
-    Please report bugs using the CPAN Request Tracker at
-    <http://rt.cpan.org/NoAuth/Bugs.html?Dist=/home/david/projects/Object-Lo
-    calVars>
+    <https://github.com/dagolden/Object-LocalVars>
+
+      git clone https://github.com/dagolden/Object-LocalVars.git
 
 AUTHOR
-    David A Golden (DAGOLDEN)
+    David Golden <dagolden@cpan.org>
 
-    dagolden@cpan.org
+COPYRIGHT AND LICENSE
+    This software is Copyright (c) 2014 by David Golden.
 
-    http://dagolden.com/
+    This is free software, licensed under:
 
-COPYRIGHT
-    Copyright (c) 2005 by David A Golden
-
-    This program is free software; you can redistribute it and/or modify it
-    under the same terms as Perl itself.
-
-    The full text of the license can be found in the LICENSE file included
-    with this module.
+      The Apache License, Version 2.0, January 2004
 
